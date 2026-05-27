@@ -60,6 +60,7 @@ const grammarMap: Record<string, string> = {
   '.go': 'tree-sitter-go.wasm',
   '.c': 'tree-sitter-c.wasm',
   '.h': 'tree-sitter-c.wasm',
+  '.php': 'tree-sitter-php.wasm',
 };
 
 /** All source file extensions that lat can parse (derived from grammarMap). */
@@ -831,6 +832,147 @@ function cFieldName(declarator: SyntaxNode): string | null {
   return null;
 }
 
+/**
+ * Extract the name of a PHP `const_element` node (NAME = value). Unlike most
+ * declarations, const_element exposes the name as its first `name` child
+ * rather than through a `name` field.
+ */
+function phpConstName(constElement: SyntaxNode): string | null {
+  for (const child of constElement.namedChildren) {
+    if (child.type === 'name') return child.text;
+  }
+  return null;
+}
+
+/**
+ * Extract methods, enum cases, and constants from a PHP class/interface/trait/
+ * enum body (`declaration_list` or `enum_declaration_list`), emitting them as
+ * children of `ownerName`.
+ */
+function extractPhpMembers(
+  body: SyntaxNode,
+  ownerName: string,
+  symbols: SourceSymbol[],
+): void {
+  for (let i = 0; i < body.namedChildCount; i++) {
+    const member = body.namedChild(i)!;
+    const startLine = member.startPosition.row + 1;
+    const endLine = member.endPosition.row + 1;
+
+    if (member.type === 'method_declaration') {
+      const name = extractName(member);
+      if (name) {
+        symbols.push({
+          name,
+          kind: 'method',
+          parent: ownerName,
+          startLine,
+          endLine,
+          signature: firstLine(member.text),
+        });
+      }
+    } else if (member.type === 'enum_case') {
+      const name = extractName(member);
+      if (name) {
+        const base = {
+          kind: 'const' as const,
+          startLine,
+          endLine,
+          signature: firstLine(member.text),
+        };
+        // Emit standalone (#PENDING) and parented (#Status#PENDING), mirroring
+        // how C enum members are handled.
+        symbols.push({ name, ...base });
+        symbols.push({ name, parent: ownerName, ...base });
+      }
+    } else if (member.type === 'const_declaration') {
+      for (const el of member.namedChildren) {
+        if (el.type !== 'const_element') continue;
+        const name = phpConstName(el);
+        if (name) {
+          symbols.push({
+            name,
+            kind: 'const',
+            parent: ownerName,
+            startLine,
+            endLine,
+            signature: firstLine(member.text),
+          });
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Walk PHP AST nodes, collecting symbols. Recurses into braced
+ * `namespace_definition { ... }` bodies; semicolon-style namespaces
+ * (`namespace App\Service;`) leave declarations as siblings at program
+ * level, where this loop already finds them.
+ */
+function collectPhpNodes(parent: SyntaxNode, symbols: SourceSymbol[]): void {
+  for (let i = 0; i < parent.childCount; i++) {
+    const node = parent.child(i)!;
+    const startLine = node.startPosition.row + 1;
+    const endLine = node.endPosition.row + 1;
+
+    if (node.type === 'namespace_definition') {
+      const body = node.childForFieldName('body');
+      if (body) collectPhpNodes(body, symbols);
+    } else if (node.type === 'function_definition') {
+      const name = extractName(node);
+      if (name) {
+        symbols.push({
+          name,
+          kind: 'function',
+          startLine,
+          endLine,
+          signature: firstLine(node.text),
+        });
+      }
+    } else if (
+      node.type === 'class_declaration' ||
+      node.type === 'interface_declaration' ||
+      node.type === 'trait_declaration' ||
+      node.type === 'enum_declaration'
+    ) {
+      const name = extractName(node);
+      if (name) {
+        symbols.push({
+          name,
+          kind: node.type === 'interface_declaration' ? 'interface' : 'class',
+          startLine,
+          endLine,
+          signature: firstLine(node.text),
+        });
+        const body = node.childForFieldName('body');
+        if (body) extractPhpMembers(body, name, symbols);
+      }
+    } else if (node.type === 'const_declaration') {
+      // Top-level / global const
+      for (const el of node.namedChildren) {
+        if (el.type !== 'const_element') continue;
+        const name = phpConstName(el);
+        if (name) {
+          symbols.push({
+            name,
+            kind: 'const',
+            startLine,
+            endLine,
+            signature: firstLine(node.text),
+          });
+        }
+      }
+    }
+  }
+}
+
+function extractPhpSymbols(tree: Tree): SourceSymbol[] {
+  const symbols: SourceSymbol[] = [];
+  collectPhpNodes(tree.rootNode, symbols);
+  return symbols;
+}
+
 function firstLine(text: string): string {
   const nl = text.indexOf('\n');
   return nl === -1 ? text : text.slice(0, nl);
@@ -861,6 +1003,9 @@ export async function parseSourceSymbols(
     }
     if (ext === '.c' || ext === '.h') {
       return extractCSymbols(tree);
+    }
+    if (ext === '.php') {
+      return extractPhpSymbols(tree);
     }
     return extractTsSymbols(tree);
   } finally {

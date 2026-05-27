@@ -846,6 +846,45 @@ describe('source-ref-go-valid', () => {
   });
 });
 
+describe('source-ref-php-valid', () => {
+  it('resolves PHP function, class, method, class const, interface, trait, enum, enum case, and global const refs without errors', async () => {
+    // docs.md links: greet (function), Greeter (class), Greeter#greet (method),
+    // Greeter#DEFAULT_NAME (class const), Greeting (interface), Loggable (trait),
+    // Loggable#log (method), Color (enum), GREEN (standalone enum case),
+    // Color#GREEN (parented enum case), Color#label (enum method),
+    // DEFAULT_GREETING (global const)
+    const { errors } = await checkMd(latDir('source-ref-php-valid'));
+    expect(errors).toHaveLength(0);
+  });
+});
+
+describe('error-source-ref-php-missing', () => {
+  it('check md reports all missing PHP symbols', async () => {
+    const { errors } = await checkMd(latDir('error-source-ref-php-missing'));
+    expect(errors).toHaveLength(4);
+
+    const byTarget = new Map(errors.map((e) => [e.target, e]));
+
+    const fn = byTarget.get('src/app.php#nonexistent')!;
+    expect(fn).toBeDefined();
+    expect(fn.message).toContain('symbol "nonexistent" not found');
+
+    const cls = byTarget.get('src/app.php#MissingClass')!;
+    expect(cls).toBeDefined();
+    expect(cls.message).toContain('symbol "MissingClass" not found');
+
+    const cnst = byTarget.get('src/app.php#MISSING_CONST')!;
+    expect(cnst).toBeDefined();
+    expect(cnst.message).toContain('symbol "MISSING_CONST" not found');
+
+    const method = byTarget.get('src/app.php#Greeter#missingMethod')!;
+    expect(method).toBeDefined();
+    expect(method.message).toContain(
+      'symbol "Greeter#missingMethod" not found',
+    );
+  });
+});
+
 describe('error-source-ref-rs-missing', () => {
   it('check md reports all missing Rust symbols', async () => {
     const { errors } = await checkMd(latDir('error-source-ref-rs-missing'));
