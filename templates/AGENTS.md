@@ -1,6 +1,7 @@
 # Before starting work
 
 - Run `lat search` to find sections relevant to your task. Read them to understand the design intent before writing code.
+- Write `lat search` queries as full natural-language descriptions, not 2-3 bare keywords. Expand terse intent into the underlying concept with likely synonyms (e.g. `download limit` → `how are user downloads limited per plan quota per hour`). Terse keyword queries retrieve markedly worse — full questions measured +67% better top-1 retrieval.
 - Run `lat expand` on user prompts to expand any `[[refs]]` — this resolves section names to file locations and provides context.
 
 # Post-task checklist (REQUIRED — do not skip)

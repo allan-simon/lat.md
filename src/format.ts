@@ -13,7 +13,7 @@ export function formatSectionId(id: string, s: Styler): string {
 export function formatSectionPreview(
   ctx: CmdContext,
   section: Section,
-  opts?: { reason?: string },
+  opts?: { reason?: string; score?: number },
 ): string {
   const s = ctx.styler;
   const relPath = relative(
@@ -22,7 +22,15 @@ export function formatSectionPreview(
   );
 
   const kind = section.id.includes('#') ? 'Section' : 'File';
-  const reasonSuffix = opts?.reason ? ' ' + s.dim(`(${opts.reason})`) : '';
+  // Surface the bounded relevance score (when present) so ranking is
+  // transparent and debuggable, e.g. `(semantic match, score 0.83)`.
+  const annotation = [
+    opts?.reason,
+    opts?.score !== undefined ? `score ${opts.score.toFixed(2)}` : undefined,
+  ]
+    .filter((p): p is string => !!p)
+    .join(', ');
+  const reasonSuffix = annotation ? ' ' + s.dim(`(${annotation})`) : '';
   const lines: string[] = [
     `${s.dim('*')} ${s.dim(kind + ':')} [[${formatSectionId(section.id, s)}]]${reasonSuffix}`,
     `  ${s.dim('Defined in')} ${s.cyan(relPath)}${s.dim(`:${section.startLine}-${section.endLine}`)}`,
@@ -47,6 +55,7 @@ export function formatResultList(
     lines.push(
       formatSectionPreview(ctx, matches[i].section, {
         reason: matches[i].reason,
+        score: matches[i].score,
       }),
     );
   }

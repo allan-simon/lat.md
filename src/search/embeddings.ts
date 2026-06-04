@@ -2,11 +2,28 @@ import type { EmbeddingProvider } from './provider.js';
 
 const MAX_BATCH = 2048;
 
+/**
+ * Embed `texts` with the active provider.
+ *
+ * `isQuery` distinguishes search queries from indexed documents. HTTP providers
+ * (OpenAI/Vercel) ignore it — they use the same model for both. Asymmetric
+ * local models (see [[cli#search#Local Mode]]) prepend a query instruction
+ * prefix to QUERIES ONLY; documents get no prefix. Defaults to `false`
+ * (document) so the indexing path is unaffected.
+ */
 export async function embed(
   texts: string[],
   provider: EmbeddingProvider,
   key: string,
+  isQuery = false,
 ): Promise<number[][]> {
+  // Asymmetric in-process providers run the GGUF locally and apply their own
+  // query prefix + pooling; dispatch to them before the HTTP batch path.
+  if (provider.name === 'local') {
+    const { embedLocal } = await import('./local.js');
+    return embedLocal(texts, provider, isQuery);
+  }
+
   const results: number[][] = [];
 
   for (let i = 0; i < texts.length; i += MAX_BATCH) {

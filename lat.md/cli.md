@@ -306,7 +306,9 @@ Usage: `lat search [query] [--limit=5] [--reindex]`
 
 Query is optional — `lat search --reindex` re-indexes without searching. Results include a navigation hint footer suggesting `lat locate`, `lat refs`, and `lat search` for further exploration — this makes the tools self-documenting so agents discover them organically.
 
-Core search logic in [[src/cli/search.ts#runSearch]] (returns matched sections), used by both the CLI command and [[cli#mcp]] `lat_search` tool. Indexing and embedding internals in `src/search/`.
+Core search logic in [[src/cli/search.ts#runSearch]] (returns matched sections, each with a bounded relevance `score`), used by both the CLI command and [[cli#mcp]] `lat_search` tool. Indexing and embedding internals in `src/search/`.
+
+Each result carries a transparent `score` ([[cli#search#Score Components]]). After the dense top-k is found, results are expanded along the wiki-link graph ([[cli#search#Graph Expansion]]). Search never hard-fails: a missing key or embedding error degrades to a keyword search ([[cli#search#Keyword Fallback]]) rather than erroring.
 
 ### Provider Detection
 
@@ -328,19 +330,49 @@ Implementation: [[src/search/provider.ts]], [[src/config.ts]]
 
 ### Embeddings
 
-Direct `fetch()` calls to the provider's OpenAI-compatible `/v1/embeddings` endpoint. No LangChain or other framework — keeps the dependency tree minimal. Batches up to 2048 texts per request.
+[[src/search/embeddings.ts#embed]] dispatches by provider. HTTP providers (OpenAI/Vercel/replay) make direct `fetch()` calls to the OpenAI-compatible `/v1/embeddings` endpoint; the in-process [[cli#search#Local Mode]] provider is dispatched to [[src/search/local.ts#embedLocal]] instead.
+
+HTTP providers use no LangChain or other framework, batching up to 2048 texts per request.
+
+`embed` takes an `isQuery` flag (default `false` = document). HTTP providers ignore it; the asymmetric local model uses it to apply a query instruction prefix to queries only. Both return the same `number[][]` vector interface, so the [[cli#search#Hybrid Search]] dense side works unchanged with either.
 
 Implementation: [[src/search/embeddings.ts]]
+
+### Local Mode
+
+An in-process, offline embedding provider that runs a GGUF model directly — no API key, no daemon, no hosted call. Selected via `LAT_LLM_KEY=local:qwen3-0.6b` (a `local:` branch in [[src/search/provider.ts#detectProvider]]) or `LAT_EMBED_PROVIDER=local` (synthesized into a `local` key by [[src/config.ts#getLlmKey]]).
+
+The model is **Qwen3-Embedding-0.6B** (`Qwen3-Embedding-0.6B-Q8_0.gguf`, ~639 MB, 1024-dim), downloaded lazily to the XDG cache dir ([[src/search/local.ts#modelCacheDir]]) on first use via [[src/search/local.ts#ensureModelFile]]. It streams to a unique per-attempt temp file (`<dest>.<pid>.<uuid>.part`), validates the streamed size against `Content-Length`, then atomically renames onto the final path — so an interrupted/failed download leaves no partial GGUF (the temp is unlinked on error) and concurrent first-use processes never clobber each other. Not resumable: a failed download restarts.
+
+Runtime is [`node-llama-cpp`](https://www.npmjs.com/package/node-llama-cpp), an `optionalDependency` with prebuilt linux-x64 binaries (no compiler). It is lazy-`import()`ed inside [[src/search/local.ts#embedLocal]] so non-local and non-search commands — and HTTP-only users — never pay the native cost; a missing dependency yields a clear "install node-llama-cpp or use a hosted provider" error. The GGUF is loaded once per process via `getLlama()` → `loadModel()` → `createEmbeddingContext()`, and `context.getEmbeddingFor(text)` returns one pooled vector per input (Qwen needs last-token pooling, which node-llama-cpp delegates to the GGUF metadata).
+
+Qwen embedding models are **asymmetric**: [[src/search/embeddings.ts#embed]] passes `isQuery`, and `embedLocal` prepends the instruction prefix `Instruct: Given a search query, retrieve relevant documentation sections\nQuery: ` to QUERIES ONLY — documents are embedded raw. All outputs are L2-normalized. Because the provider exposes the same `${name}:${model}:${dimensions}` fingerprint and vector interface, switching to/from local self-heals the index via the [[cli#search#Model Fingerprint]] rebuild.
+
+Implementation: [[src/search/local.ts]]
 
 ### Storage
 
 Uses `@libsql/client` (Turso's libsql) in local file mode — pure JS/WASM, no native addons. Vector search is built into libsql via `F32_BLOB` column type, `libsql_vector_idx` for indexing, and `vector_top_k()` for KNN queries.
 
-Single `sections` table holds metadata, content, content hash, and the embedding vector. No separate vector table needed.
+A `sections` table holds metadata, content, content hash, and the embedding vector. Alongside it, an FTS5 virtual table `sections_fts` mirrors each section's heading + content for the lexical side of [[cli#search#Hybrid Search]], and a `meta(key, value)` table records the active [[cli#search#Model Fingerprint]].
 
 The database is stored at `lat.md/.cache/vectors.db` and should not be committed (included in `.gitignore` template).
 
 Implementation: [[src/search/db.ts]]
+
+### Model Fingerprint
+
+The index records the embedding model it was built with so a model or dimension switch self-heals instead of silently corrupting search.
+
+[[src/search/db.ts#modelFingerprint]] computes a stable identity `${provider.name}:${provider.model}:${provider.dimensions}` and stores it in the `meta` table under `embedding_fingerprint`. On every run, [[src/search/db.ts#ensureSchema]] compares the active provider's fingerprint to the stored one:
+
+- **missing** (fresh DB) — write it and create the tables. (Safe to write up front: the empty `sections` table means the next run re-embeds everything regardless, so a failed first index self-heals.)
+- **same** — proceed incrementally.
+- **different** (model/dim change) — DROP and recreate `sections` + `sections_fts` + the vector index empty at the new dimensions and report `rebuilt: true`, but DO NOT write the new fingerprint yet. The following index pass re-embeds every section because the tables are empty; the new fingerprint is committed via [[src/search/db.ts#commitFingerprint]] only after that pass succeeds. If the re-embed is interrupted (the embed call throws and [[src/cli/search.ts#runSearch]] degrades to keyword fallback), the old fingerprint persists and the next run re-detects the switch and rebuilds again — it never trusts the empty/partial tables as a fully-indexed model B.
+
+The commit is wired in [[src/cli/search.ts#withDb]]: after `indexSections()` resolves it calls `commitFingerprint` for the rebuilt case. The rebuild is surfaced to the user via the `onModelSwitch` progress callback (a dim stderr note `Embedding model changed (… → …); rebuilding index from scratch.`), shown even outside `--reindex` since it explains the full re-embed. This fixes a real dead-code bug: the `meta` table was previously created but never read or written.
+
+Implementation: [[src/search/db.ts#ensureSchema]] + [[src/search/db.ts#commitFingerprint]], wired in [[src/cli/search.ts#withDb]], surfaced in [[src/cli/search.ts#cliProgress]]
 
 ### Indexing
 
@@ -355,13 +387,59 @@ Content freshness is tracked via SHA-256 hashes. On each run:
 
 On first run, automatically indexes all sections. The `--reindex` flag forces a full rebuild.
 
+Long sections are chunked and pooled before embedding (see [[cli#search#Chunk and Pool]]). The FTS5 lexical mirror `sections_fts` is maintained in lockstep with the vector rows — every insert/replace/delete touches both — so the [[cli#search#Hybrid Search]] bm25 side never drifts from the dense side.
+
 Implementation: [[src/search/index.ts]]
+
+### Chunk and Pool
+
+Sections longer than ~300 words are split into overlapping windows before embedding so nothing is silently truncated.
+
+Short-context embedding models truncate at ~512 tokens, silently dropping 15-28% of long sections. To avoid this, [[src/search/index.ts#chunkWords]] splits a section into `CHUNK_WORDS` (≈300) word windows with `CHUNK_OVERLAP` (≈50) word overlap (stride = `CHUNK_WORDS - CHUNK_OVERLAP`, so consecutive windows share the overlap and no content is lost). Each window is embedded with the active provider, then [[src/search/index.ts#meanPool]] L2-normalizes every window vector, averages them component-wise, and L2-normalizes the result into one section vector. Short sections produce a single window and pass through (after normalization) unchanged. The content-hash incremental logic is untouched — only changed/new sections are (re-)chunked and (re-)embedded.
+
+Implementation: [[src/search/index.ts#chunkWords]], [[src/search/index.ts#meanPool]]
 
 ### Vector Search
 
 Embeds the user's query via the same provider, then runs a `vector_top_k()` KNN query joined back to the sections table.
 
+This dense-only path is still used directly by the RAG replay tests; the live `lat search` default is [[cli#search#Hybrid Search]], which uses the same KNN as its dense side.
+
 Implementation: [[src/search/search.ts]]
+
+### Hybrid Search
+
+When embeddings are available, `lat search` fuses a dense (semantic) ranking with a lexical (FTS5/bm25) ranking instead of using dense alone — rescuing exact-identifier and rare-term queries the embedding model under-ranks.
+
+[[src/search/hybrid.ts#hybridSearch]] pulls ~20 candidates from each side: dense via `vector_top_k` (same KNN as [[cli#search#Vector Search]], scored by [[src/search/search.ts#distanceToScore]]), lexical via `sections_fts MATCH … ORDER BY bm25()`. SQLite's `bm25()` returns *more-negative = more relevant*, so it's negated to a higher-is-better raw score. [[src/search/hybrid.ts#fuseCandidates]] then per-query [[src/search/hybrid.ts#minMaxNormalize|min-max normalizes]] each side to `[0, 1]` and combines them as `DENSE_WEIGHT * dense + (1 - DENSE_WEIGHT) * bm25` with `DENSE_WEIGHT = 0.75`. A candidate found by only one side contributes 0 from the missing side. The FTS match expression is built by [[src/search/hybrid.ts#buildFtsMatch]], which quotes each alphanumeric token and OR-joins them so any user query is a valid (never operator-injecting) MATCH.
+
+The fused list feeds [[cli#search#Graph Expansion]] and is then truncated to the limit — so neighbours can be discovered from more than `limit` seeds. The fused `score` is threaded through `SectionMatch` and rendered like any other (labelled `hybrid match`). The dense side works with EITHER the HTTP provider OR the in-process [[cli#search#Local Mode]] provider — same vector interface. The no-embeddings case still uses [[cli#search#Keyword Fallback]].
+
+Implementation: [[src/search/hybrid.ts]]
+
+### Score Components
+
+Every search result carries a bounded relevance `score` in `[0, 1]` (higher is better) so ranking is transparent and debuggable.
+
+For dense hits, `vector_top_k` exposes a cosine `distance` (0 = identical .. 2 = opposite); [[src/search/search.ts#distanceToScore]] maps it to a score via `1 - distance / 2`, clamped to `[0, 1]`. The score is threaded through `SectionMatch` and rendered in the [[cli#Section Preview]] (e.g. `(semantic match, score 0.83)`). Keyword-fallback and graph-expanded results carry their own scores on the same scale.
+
+Implementation: [[src/search/search.ts#distanceToScore]], surfaced in [[src/format.ts#formatSectionPreview]]
+
+### Keyword Fallback
+
+Search never hard-fails. When no LLM key is configured, or when the embedding/provider call throws, `lat search` degrades to a keyword/heading search over the corpus instead of erroring.
+
+[[src/search/keyword.ts#keywordSearch]] scores each section by query-token overlap over its heading (weighted double) and body, bounded to `[0, 1]`, and returns the top hits labelled `keyword fallback (no embeddings)`. A one-line dim note is printed to stderr (CLI mode only) so the user knows semantic search was unavailable. The MCP path no longer returns `isError` for a missing key — it degrades like the CLI; `isError` is reserved for genuinely unexpected failures.
+
+Implementation: [[src/search/keyword.ts#keywordSearch]], wired in [[src/cli/search.ts#runSearch]]
+
+### Graph Expansion
+
+After the dense (or keyword-fallback) top-k is found, results are expanded one hop along the [[parser#Wiki Links]] graph so closely-linked sections surface even when they don't match the query directly.
+
+[[src/search/graph.ts#expandViaGraph]] builds adjacency by resolving every wiki link's target with the same `resolveRef` used by [[cli#refs]]/[[cli#check]], treats edges as undirected, then BFS-walks `HOP_COUNT` hop(s) from the seeds. Each neighbour not already present is added at `parentScore * GRAPH_PENALTY`. With `HOP_COUNT = 1` and `GRAPH_PENALTY = 0.5`, the penalty guarantees an inferred neighbour can never outrank the direct hit that pulled it in, so the expansion is conservative and always-on. The merged list is re-sorted by score and truncated to the limit.
+
+Implementation: [[src/search/graph.ts#expandViaGraph]], merged in [[src/cli/search.ts#runSearch]]
 
 ## Section Preview
 
@@ -369,7 +447,7 @@ Shared output format used by [[cli#locate]], [[cli#refs]], and [[cli#search]]. E
 
 1. Kind label (`File:` or `Section:`) — file root sections vs subsections
 2. Section id in `[[wiki link]]` syntax (path segments dimmed, final segment bold)
-3. Match reason in parentheses (e.g. `(exact match)`, `(section name match)`, `(fuzzy match, distance 2)`)
+3. Match reason in parentheses (e.g. `(exact match)`, `(section name match)`, `(fuzzy match, distance 2)`); when the match carries a relevance [[cli#search#Score Components|score]] (search results), it's appended as `, score 0.83`
 4. "Defined in" label with file path (cyan) and line range
 5. Body text quoted with `>` (first paragraph, guaranteed ≤250 chars by [[cli#check#sections]])
 

@@ -1,3 +1,5 @@
+import { resolveLocalModel, localProvider } from './local.js';
+
 export type EmbeddingProvider = {
   name: string;
   apiBase: string;
@@ -5,6 +7,11 @@ export type EmbeddingProvider = {
   dimensions: number;
   headers: (key: string) => Record<string, string>;
 };
+
+/** Build the in-process local provider descriptor for a `local[:id]` key. */
+function localProviderFor(key: string): EmbeddingProvider {
+  return localProvider(resolveLocalModel(key));
+}
 
 const openai: EmbeddingProvider = {
   name: 'openai',
@@ -38,6 +45,14 @@ export function detectProvider(key: string): EmbeddingProvider {
       dimensions: 1536,
       headers: () => ({ 'Content-Type': 'application/json' }),
     };
+  }
+  // In-process local GGUF model (no API key, no daemon). Selected via
+  // `LAT_LLM_KEY=local:<id>` (e.g. `local:qwen3-0.6b`) or `LAT_EMBED_PROVIDER=
+  // local`. The actual model + node-llama-cpp are loaded lazily (see
+  // [[cli#search#Local Mode]]); here we only need the provider descriptor, so
+  // we build it from the static model registry without touching the native dep.
+  if (key === 'local' || key.startsWith('local:')) {
+    return localProviderFor(key);
   }
   if (key.startsWith('sk-ant-')) {
     throw new Error(

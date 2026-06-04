@@ -353,6 +353,13 @@ const MAX_DISTANCE_RATIO = 0.4;
 export type SectionMatch = {
   section: Section;
   reason: string;
+  /**
+   * Optional bounded relevance score in [0, 1]. Higher is more relevant.
+   * Set by `lat search` (semantic, keyword-fallback, and graph-expanded
+   * results) so ranking is debuggable and surfaced to the user. Name-based
+   * lookups (`findSections`) leave it undefined.
+   */
+  score?: number;
 };
 
 export function findSections(

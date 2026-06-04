@@ -10,6 +10,7 @@ import { searchCommand } from '../cli/search.js';
 import { expandCommand } from '../cli/expand.js';
 import { checkAllCommand } from '../cli/check.js';
 import { refsCommand, type Scope } from '../cli/refs.js';
+import { disposeLocal } from '../search/local.js';
 
 function toMcp(result: CmdResult) {
   const content = [{ type: 'text' as const, text: result.output }];
@@ -95,6 +96,22 @@ export async function startMcpServer(): Promise<void> {
       toMcp(await refsCommand(ctx, query, scope as Scope)),
   );
 
+  // The local embedding mode keeps a ~639MB GGUF model + native embedding
+  // context alive in a process-lifetime singleton (see [[src/search/local.ts]]).
+  // This server is long-lived, so free those native resources on shutdown —
+  // when the stdio transport closes and on the usual termination signals.
+  // Idempotent: disposeLocal() is a no-op if local mode was never used.
+  let disposed = false;
+  const shutdown = (): void => {
+    if (disposed) return;
+    disposed = true;
+    void disposeLocal();
+  };
   const transport = new StdioServerTransport();
+  transport.onclose = shutdown;
+  process.once('SIGINT', shutdown);
+  process.once('SIGTERM', shutdown);
+  process.once('beforeExit', shutdown);
+
   await server.connect(transport);
 }

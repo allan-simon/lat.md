@@ -47,11 +47,17 @@ export function writeConfig(config: LatConfig): void {
  * 3. LAT_LLM_KEY_HELPER — shell command that prints the key
  * 4. llm_key field in ~/.config/lat/config.json
  *
- * Returns undefined if none is set.
+ * As a special case, `LAT_EMBED_PROVIDER=local` selects the in-process local
+ * embedding model (see [[cli#search#Local Mode]]) without any API key — it
+ * synthesizes a `local:<id>` key (honoring an explicit `LAT_LLM_KEY=local:<id>`
+ * if also set). Returns undefined if nothing is configured.
  */
 export function getLlmKey(): string | undefined {
   const envKey = process.env.LAT_LLM_KEY;
   if (envKey) return envKey;
+
+  // `LAT_EMBED_PROVIDER=local` opts into the local model with no API key.
+  if (process.env.LAT_EMBED_PROVIDER === 'local') return 'local';
 
   const file = process.env.LAT_LLM_KEY_FILE;
   if (file) {
