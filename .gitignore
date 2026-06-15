@@ -1,6 +1,5 @@
 .DS_Store
 node_modules
-dist
 .pnpm-debug.log
 .mcp.json
 .cursor/mcp.json
