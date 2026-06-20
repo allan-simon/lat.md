@@ -42,6 +42,14 @@ describe('staticSearch (hybrid)', () => {
         const noVec = docs.map(({ vec: _vec, ...d }) => d);
         expect(staticSearch('apple', noVec, [0, 1])[0].url).toBe('a.html');
     });
+    it('matches terms found only in the ancestor breadcrumb (contextual retrieval)', () => {
+        const ctx = [
+            { url: 'a.html', heading: 'Overview', firstParagraph: '', text: 'general intro', ancestors: 'Payments > Refunds' },
+            { url: 'b.html', heading: 'Overview', firstParagraph: '', text: 'general intro', ancestors: 'Shipping > Returns' },
+        ];
+        // "refunds" appears only in a's breadcrumb, nowhere in heading/body.
+        expect(staticSearch('refunds', ctx, null)[0].url).toBe('a.html');
+    });
 });
 // @lat: [[tests/build#Static build]]
 describe('lat build', () => {
@@ -74,7 +82,9 @@ describe('lat build', () => {
         const docs = JSON.parse(await readFile(join(out, 'search-index.json'), 'utf-8'));
         const hits = bm25Search('hybrid dense bm25 fusion', docs);
         expect(hits.length).toBeGreaterThan(0);
-        expect(hits[0].heading.toLowerCase()).toContain('hybrid');
+        // Top hit should be a fusion/hybrid-related section (exact one varies with
+        // breadcrumb context in the index).
+        expect(hits[0].heading.toLowerCase()).toMatch(/hybrid|fusion/);
         // The hit's target page actually exists on disk.
         const files = await readdir(out);
         expect(files).toContain(hits[0].url);

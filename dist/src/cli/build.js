@@ -139,6 +139,8 @@ export async function buildCommand(ctx, opts) {
             search: { mode: 'static', indexHref: 'search-index.json' },
         });
         await writeFile(join(outDir, sectionUrl(section.id)), html);
+        // Ancestor heading path (no leaf) — prepended for contextual retrieval.
+        const ancestors = section.id.split('#').slice(1, -1).join(' > ');
         searchIndex.push({
             id: section.id,
             url: sectionUrl(section.id),
@@ -146,6 +148,7 @@ export async function buildCommand(ctx, opts) {
             file: section.filePath,
             firstParagraph: section.firstParagraph,
             text: content,
+            ancestors: ancestors || undefined,
         });
     }
     // Optional dense vectors: embed each section with the same small model the
@@ -154,11 +157,13 @@ export async function buildCommand(ctx, opts) {
     // native deps or model download.
     let denseNote = '';
     if (opts.dense) {
-        const embedded = await embedDocs(searchIndex.map((e) => `${e.heading} ${e.text}`));
+        // Embed breadcrumb + heading + body (contextual retrieval); the browser
+        // embeds the query with the same model + its query prefix.
+        const embedded = await embedDocs(searchIndex.map((e) => [e.ancestors, e.heading, e.text].filter(Boolean).join('\n')));
         if (embedded) {
             embedded.forEach((vec, i) => (searchIndex[i].vec = vec));
             denseNote = ctx.styler.dim(` Dense vectors shipped (${embedded[0]?.length ?? 0}-dim, ${STATIC_EMBED_MODEL}); ` +
-                'the page lazy-loads the same model (~23 MB) to embed queries.');
+                'the page lazy-loads the same model (~34 MB) to embed queries.');
         }
         else {
             denseNote = ctx.styler.yellow(' --dense skipped: install the optional @huggingface/transformers dependency.');

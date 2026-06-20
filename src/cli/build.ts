@@ -149,6 +149,7 @@ export async function buildCommand(
     file: string;
     firstParagraph: string;
     text: string;
+    ancestors?: string;
     vec?: number[];
   }[] = [];
 
@@ -193,6 +194,8 @@ export async function buildCommand(
     });
     await writeFile(join(outDir, sectionUrl(section.id)), html);
 
+    // Ancestor heading path (no leaf) — prepended for contextual retrieval.
+    const ancestors = section.id.split('#').slice(1, -1).join(' > ');
     searchIndex.push({
       id: section.id,
       url: sectionUrl(section.id),
@@ -200,6 +203,7 @@ export async function buildCommand(
       file: section.filePath,
       firstParagraph: section.firstParagraph,
       text: content,
+      ancestors: ancestors || undefined,
     });
   }
 
@@ -209,14 +213,18 @@ export async function buildCommand(
   // native deps or model download.
   let denseNote = '';
   if (opts.dense) {
+    // Embed breadcrumb + heading + body (contextual retrieval); the browser
+    // embeds the query with the same model + its query prefix.
     const embedded = await embedDocs(
-      searchIndex.map((e) => `${e.heading} ${e.text}`),
+      searchIndex.map((e) =>
+        [e.ancestors, e.heading, e.text].filter(Boolean).join('\n'),
+      ),
     );
     if (embedded) {
       embedded.forEach((vec, i) => (searchIndex[i].vec = vec));
       denseNote = ctx.styler.dim(
         ` Dense vectors shipped (${embedded[0]?.length ?? 0}-dim, ${STATIC_EMBED_MODEL}); ` +
-          'the page lazy-loads the same model (~23 MB) to embed queries.',
+          'the page lazy-loads the same model (~34 MB) to embed queries.',
       );
     } else {
       denseNote = ctx.styler.yellow(

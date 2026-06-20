@@ -138,12 +138,24 @@ export type SearchDoc = {
   heading: string;
   firstParagraph: string;
   text: string;
+  /** Ancestor heading path (e.g. "CLI > search"), prepended for BM25 context. */
+  ancestors?: string;
   /** L2-normalized dense embedding, present only when built with `--dense`. */
   vec?: number[];
 };
 
-/** Embedding model used for the static dense index (same in Node build + browser query). */
-export const STATIC_EMBED_MODEL = 'Xenova/all-MiniLM-L6-v2';
+/**
+ * Embedding model for the static dense index — the SAME model runs in Node at
+ * build time and in the browser for the query. `bge-small-en-v1.5` (384-dim)
+ * was the best quality-per-byte option in the relevance eval (see
+ * `scripts/eval-relevance.ts`). It is asymmetric: queries get
+ * [[src/render/site.ts#STATIC_QUERY_PREFIX]], documents are embedded raw.
+ */
+export const STATIC_EMBED_MODEL = 'Xenova/bge-small-en-v1.5';
+
+/** Instruction prefix bge applies to QUERIES only (documents are embedded raw). */
+export const STATIC_QUERY_PREFIX =
+  'Represent this sentence for searching relevant passages: ';
 
 /** A ranked search hit returned by [[src/render/site.ts#bm25Search]]. */
 export type SearchHit = {
@@ -176,7 +188,9 @@ export function staticSearch(
   if (!N) return [];
 
   const prepared = docs.map((d) => {
-    const terms = tok(`${d.heading} ${d.text}`);
+    const terms = tok(
+      `${d.ancestors ? d.ancestors + ' ' : ''}${d.heading} ${d.text}`,
+    );
     const tf: Record<string, number> = {};
     for (const t of terms) tf[t] = (tf[t] || 0) + 1;
     return { d, tf, len: terms.length };
@@ -274,7 +288,7 @@ var staticSearch = ${staticSearch.toString()};
   async function run(v){
     var qv = null;
     if (extractor) {
-      try { var o = await extractor(v, { pooling: 'mean', normalize: true }); qv = Array.from(o.data); }
+      try { var o = await extractor('__QUERY_PREFIX__' + v, { pooling: 'mean', normalize: true }); qv = Array.from(o.data); }
       catch (e) { qv = null; }
     }
     if (docs) renderResults(staticSearch(v, docs, qv), results);
@@ -294,10 +308,9 @@ export type SearchMode =
 
 function searchScript(search: SearchMode): string {
   if (search.mode === 'server') return SEARCH_SERVER;
-  return SEARCH_STATIC.replace('__INDEX_HREF__', search.indexHref).replace(
-    '__EMBED_MODEL__',
-    STATIC_EMBED_MODEL,
-  );
+  return SEARCH_STATIC.replace('__INDEX_HREF__', search.indexHref)
+    .replace('__EMBED_MODEL__', STATIC_EMBED_MODEL)
+    .replace('__QUERY_PREFIX__', STATIC_QUERY_PREFIX);
 }
 
 // ── Page assembly ───────────────────────────────────────────────────
