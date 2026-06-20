@@ -2,14 +2,17 @@ import type { Client } from '@libsql/client';
 import { embed } from './embeddings.js';
 import type { EmbeddingProvider } from './provider.js';
 import type { SearchResult } from './search.js';
+import { buildFtsMatch, fuseCandidates } from './fusion.js';
 
-/**
- * Weight given to the dense (semantic) side in the hybrid fusion. The lexical
- * (bm25) side gets `1 - DENSE_WEIGHT`. Empirically validated at 0.75: dense
- * leads, but lexical breaks ties and rescues exact-identifier / rare-term
- * queries the embedding model under-ranks. See [[cli#search#Hybrid Search]].
- */
-export const DENSE_WEIGHT = 0.75;
+// The pure fusion primitives live in [[src/search/fusion.ts]] (no libsql/Node
+// deps) so the browser bundle can reuse the exact same normalization + weights.
+// Re-exported here so existing importers (and the test suite) keep their paths.
+export {
+  DENSE_WEIGHT,
+  minMaxNormalize,
+  buildFtsMatch,
+  fuseCandidates,
+} from './fusion.js';
 
 /**
  * Baseline number of candidates to pull from each side before fusing. Scaled up
@@ -20,71 +23,6 @@ const CANDIDATES_PER_SIDE = 20;
 
 /** A fused hybrid hit: section row data plus the combined relevance score. */
 export type HybridResult = SearchResult;
-
-/**
- * Min-max normalize a map of raw scores to [0, 1] (higher = better). When all
- * raw scores are equal (or there is a single candidate) every entry maps to 1
- * so a side with one strong hit isn't zeroed out by degenerate normalization.
- * This single/all-equal → 1.0 behavior is relied on by the LEXICAL side: a lone
- * exact-identifier FTS hit gets the full lexical weight so it can be rescued
- * (see [[search#Hybrid Fusion#FTS rescues an exact identifier]]).
- */
-export function minMaxNormalize(raw: Map<string, number>): Map<string, number> {
-  const values = [...raw.values()];
-  if (values.length === 0) return new Map();
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const span = max - min;
-  const out = new Map<string, number>();
-  for (const [id, v] of raw) {
-    out.set(id, span === 0 ? 1 : (v - min) / span);
-  }
-  return out;
-}
-
-/**
- * Fuse raw dense + lexical candidate scores into a ranked list. Both sides
- * arrive as RAW higher-is-better signals — dense as cosine similarity
- * (`1 - distance`), lexical as negated bm25 — and this is the ONLY place they
- * are normalized: each side is per-query min-max normalized to [0, 1], then
- * combined as `DENSE_WEIGHT * dense + (1 - DENSE_WEIGHT) * bm25`. Feeding raw
- * cosine (not a pre-clamped per-row score) keeps the dense side's true relative
- * quality within the query — a lone or degenerate dense candidate is no longer
- * forced to the full DENSE_WEIGHT. A candidate present on only one side
- * contributes 0 from the missing side. Returns `{id, score}` sorted by
- * descending fused score. Pure — exercised directly in tests.
- */
-export function fuseCandidates(
-  denseRaw: Map<string, number>,
-  lexicalRaw: Map<string, number>,
-): { id: string; score: number }[] {
-  const dense = minMaxNormalize(denseRaw);
-  const lexical = minMaxNormalize(lexicalRaw);
-
-  const ids = new Set<string>([...dense.keys(), ...lexical.keys()]);
-  const fused: { id: string; score: number }[] = [];
-  for (const id of ids) {
-    const d = dense.get(id) ?? 0;
-    const l = lexical.get(id) ?? 0;
-    fused.push({ id, score: DENSE_WEIGHT * d + (1 - DENSE_WEIGHT) * l });
-  }
-  fused.sort((a, b) => b.score - a.score);
-  return fused;
-}
-
-/**
- * Build an FTS5 MATCH expression from a free-text query. Each alphanumeric
- * token is wrapped in double quotes (so FTS5 treats it as a literal term, not
- * an operator) and OR-joined, so a query like `getConfigDir resolution` matches
- * sections containing either term. Returns null when the query has no usable
- * tokens (caller then skips the lexical side).
- */
-export function buildFtsMatch(query: string): string | null {
-  const tokens = query.toLowerCase().match(/[a-z0-9]+/g);
-  if (!tokens || tokens.length === 0) return null;
-  const unique = [...new Set(tokens)];
-  return unique.map((t) => `"${t}"`).join(' OR ');
-}
 
 /**
  * Dense (vector KNN) candidate scores, keyed by section id, as RAW cosine

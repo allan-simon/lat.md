@@ -56,15 +56,15 @@ Unit + integration tests (always run) for [[src/search/hybrid.ts]], the dense + 
 
 ### FTS match expression
 
-Tests for [[src/search/hybrid.ts#buildFtsMatch]]. Verify each alphanumeric token is quoted and OR-joined, that FTS5 operator characters are stripped into plain quoted terms so a query can never be a MATCH syntax error, and that a token-less query returns null.
+Tests for [[src/search/fusion.ts#buildFtsMatch]]. Verify each alphanumeric token is quoted and OR-joined, that FTS5 operator characters are stripped into plain quoted terms so a query can never be a MATCH syntax error, and that a token-less query returns null.
 
 ### Score fusion
 
-Tests for [[src/search/hybrid.ts#fuseCandidates]]. Verify two min-max-normalized sides combine as `DENSE_WEIGHT*dense + (1-DENSE_WEIGHT)*bm25` (with `DENSE_WEIGHT = 0.75`), and that a candidate present on only one side is scored from that side alone (missing side contributes 0).
+Tests for [[src/search/fusion.ts#fuseCandidates]]. Verify two min-max-normalized sides combine as `DENSE_WEIGHT*dense + (1-DENSE_WEIGHT)*bm25` (with `DENSE_WEIGHT = 0.75`), and that a candidate present on only one side is scored from that side alone (missing side contributes 0).
 
 ### Min-max normalization
 
-Tests for [[src/search/hybrid.ts#minMaxNormalize]]. Verify a degenerate set of all-equal raw scores maps every entry to 1 instead of dividing by a zero span (so a single strong hit on one side isn't zeroed out).
+Tests for [[src/search/fusion.ts#minMaxNormalize]]. Verify a degenerate set of all-equal raw scores maps every entry to 1 instead of dividing by a zero span (so a single strong hit on one side isn't zeroed out).
 
 ### FTS rescues an exact identifier
 

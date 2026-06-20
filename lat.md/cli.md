@@ -419,11 +419,13 @@ Implementation: [[src/search/search.ts]]
 
 When embeddings are available, `lat search` fuses a dense (semantic) ranking with a lexical (FTS5/bm25) ranking instead of using dense alone — rescuing exact-identifier and rare-term queries the embedding model under-ranks.
 
-[[src/search/hybrid.ts#hybridSearch]] pulls ~20 candidates from each side: dense via `vector_top_k` (same KNN as [[cli#search#Vector Search]], scored by [[src/search/search.ts#distanceToScore]]), lexical via `sections_fts MATCH … ORDER BY bm25()`. SQLite's `bm25()` returns *more-negative = more relevant*, so it's negated to a higher-is-better raw score. [[src/search/hybrid.ts#fuseCandidates]] then per-query [[src/search/hybrid.ts#minMaxNormalize|min-max normalizes]] each side to `[0, 1]` and combines them as `DENSE_WEIGHT * dense + (1 - DENSE_WEIGHT) * bm25` with `DENSE_WEIGHT = 0.75`. A candidate found by only one side contributes 0 from the missing side. The FTS match expression is built by [[src/search/hybrid.ts#buildFtsMatch]], which quotes each alphanumeric token and OR-joins them so any user query is a valid (never operator-injecting) MATCH.
+[[src/search/hybrid.ts#hybridSearch]] pulls ~20 candidates from each side: dense via `vector_top_k` (same KNN as [[cli#search#Vector Search]], scored by [[src/search/search.ts#distanceToScore]]), lexical via `sections_fts MATCH … ORDER BY bm25()`. SQLite's `bm25()` returns *more-negative = more relevant*, so it's negated to a higher-is-better raw score. [[src/search/fusion.ts#fuseCandidates]] then per-query [[src/search/fusion.ts#minMaxNormalize|min-max normalizes]] each side to `[0, 1]` and combines them as `DENSE_WEIGHT * dense + (1 - DENSE_WEIGHT) * bm25` with `DENSE_WEIGHT = 0.75`. A candidate found by only one side contributes 0 from the missing side. The FTS match expression is built by [[src/search/fusion.ts#buildFtsMatch]], which quotes each alphanumeric token and OR-joins them so any user query is a valid (never operator-injecting) MATCH.
 
 The fused list feeds [[cli#search#Graph Expansion]] and is then truncated to the limit — so neighbours can be discovered from more than `limit` seeds. The fused `score` is threaded through `SectionMatch` and rendered like any other (labelled `hybrid match`). The dense side works with EITHER the HTTP provider OR the in-process [[cli#search#Local Mode]] provider — same vector interface. The no-embeddings case still uses [[cli#search#Keyword Fallback]].
 
-Implementation: [[src/search/hybrid.ts]]
+The normalization + weighting primitives (`fuseCandidates`, `minMaxNormalize`, `buildFtsMatch`, `DENSE_WEIGHT`) live in a dependency-free module [[src/search/fusion.ts]] — no libsql, no Node — so the exact same fusion can run client-side in a browser bundle. [[src/search/hybrid.ts]] holds only the libsql-coupled candidate fetching (`hybridSearch`, `lexicalCandidates`) and re-exports the pure parts for existing importers.
+
+Implementation: [[src/search/hybrid.ts]], [[src/search/fusion.ts]]
 
 ### Score Components
 
