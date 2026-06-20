@@ -1,0 +1,35 @@
+{"q": "how do I run searches without sending data to the cloud", "id": "lat.md/cli#CLI#search#Local Mode"}
+{"q": "what package manager should I use for this project", "id": "lat.md/dev-process#Dev Process#Package Manager"}
+{"q": "how are very long sections handled before embedding", "id": "lat.md/cli#CLI#search#Chunk and Pool"}
+{"q": "how do I find which sections link to a given one", "id": "lat.md/cli#CLI#refs"}
+{"q": "what happens to search when no embedding model is available", "id": "lat.md/cli#CLI#search#Keyword Fallback"}
+{"q": "how does the index rebuild itself when I switch embedding models", "id": "lat.md/cli#CLI#search#Model Fingerprint"}
+{"q": "how do neighbouring sections get pulled into the results", "id": "lat.md/cli#CLI#search#Graph Expansion"}
+{"q": "how are the dense and lexical rankings combined", "id": "lat.md/cli#CLI#search#Hybrid Search"}
+{"q": "set up lat with the Cursor editor", "id": "lat.md/cli#CLI#init#Cursor"}
+{"q": "configure the hooks for the Claude Code agent", "id": "lat.md/cli#CLI#init#Claude Code"}
+{"q": "where is the api key stored on disk", "id": "lat.md/cli#CLI#Configuration File"}
+{"q": "block the agent from finishing when the docs are out of date", "id": "lat.md/cli#CLI#hook#Stop"}
+{"q": "render the knowledge base as a browsable website locally", "id": "lat.md/cli#CLI#serve"}
+{"q": "generate a static documentation site for github pages", "id": "lat.md/cli#CLI#build"}
+{"q": "how does search work in the browser with no server", "id": "lat.md/cli#CLI#build#Client search"}
+{"q": "visualize the connections between sections as a graph", "id": "lat.md/cli#CLI#graph"}
+{"q": "embed an interactive html mini app inside the docs", "id": "lat.md/cli#CLI#serve#Widgets"}
+{"q": "what syntax is used for cross references between notes", "id": "lat.md/markdown#Markdown#Wiki Links"}
+{"q": "how do I link to a function in the source code", "id": "lat.md/markdown#Markdown#Wiki Links#Source Code Links"}
+{"q": "the rule that every section needs an intro sentence", "id": "lat.md/markdown#Markdown#Leading Paragraph"}
+{"q": "make sure every test spec is referenced by code", "id": "lat.md/markdown#Markdown#Frontmatter#require-code-mention"}
+{"q": "what library is used to parse the markdown", "id": "lat.md/parser#Parser"}
+{"q": "how are wiki link references pulled out of the markdown", "id": "lat.md/parser#Parser#Refs Extraction"}
+{"q": "validate that all links point to real sections", "id": "lat.md/cli#CLI#check#md"}
+{"q": "check that directory index files are complete", "id": "lat.md/cli#CLI#check#index"}
+{"q": "what testing framework does the project use", "id": "lat.md/dev-process#Dev Process#Testing"}
+{"q": "how is the package released and published to npm", "id": "lat.md/dev-process#Dev Process#Publishing"}
+{"q": "expand bracketed references in a prompt to file locations", "id": "lat.md/cli#CLI#expand"}
+{"q": "start the model context protocol server for editors", "id": "lat.md/cli#CLI#mcp"}
+{"q": "what database stores the embedding vectors", "id": "lat.md/cli#CLI#search#Storage"}
+{"q": "how does the agent get relevant docs injected into its prompt", "id": "lat.md/cli#CLI#hook#UserPromptSubmit"}
+{"q": "what does the relevance score on a result mean", "id": "lat.md/cli#CLI#search#Score Components"}
+{"q": "find a section by name with fuzzy matching", "id": "lat.md/cli#CLI#locate"}
+{"q": "show a section's full content together with its backlinks", "id": "lat.md/cli#CLI#section"}
+{"q": "what code formatter and style does the repo use", "id": "lat.md/dev-process#Dev Process#Formatting"}
