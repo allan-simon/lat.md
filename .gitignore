@@ -10,3 +10,6 @@ node_modules
 .codex
 .cursor/hooks.json
 .cursor
+
+# lat build output
+lat-docs/

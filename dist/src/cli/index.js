@@ -172,6 +172,15 @@ program
     await serveCommand(ctx, { port: parseInt(opts.port) || 4321 });
 });
 program
+    .command('build')
+    .description('Build a static HTML docs site from the lat.md graph')
+    .option('--out <dir>', 'output directory', 'lat-docs')
+    .action(async (opts) => {
+    const ctx = resolveContext(program.opts());
+    const { buildCommand } = await import('./build.js');
+    handleResult(await buildCommand(ctx, { out: opts.out }));
+});
+program
     .command('gen')
     .description('Generate a file to stdout (agents.md, claude.md, cursor-rules.md)')
     .argument('<target>', 'file to generate: agents.md, claude.md, cursor-rules.md')

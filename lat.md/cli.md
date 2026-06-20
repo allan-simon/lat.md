@@ -327,7 +327,27 @@ Interactive mini-apps live under `lat.md/_widgets/` and are embedded by section 
 
 [[src/cli/serve.ts#serveWidget]] serves them with a content-type by extension and guards against path traversal (the resolved path must stay within the widgets dir). This keeps interactive JS in self-contained, testable files instead of inline `<script>` blobs in the prose.
 
-Implementation: [[src/cli/serve.ts]], [[src/render/html.ts]]
+Implementation: [[src/cli/serve.ts]], [[src/render/html.ts]], [[src/render/site.ts]]
+
+## build
+
+Build a static HTML docs site from the graph — the same view as [[cli#serve]], but as plain files deployable to GitHub Pages with no server or runtime.
+
+Usage: `lat build [--out lat-docs]`
+
+[[src/cli/build.ts#buildCommand]] renders every section to a flat `<slug>.html` file (plus `index.html`), using the shared page builders in [[src/render/site.ts]] so output matches `serve` exactly. Flat filenames (not nested paths or query routes) keep every link relative, so the site works under any base path — including a project's GitHub Pages subpath. Interactive widgets in `lat.md/_widgets/` are copied alongside.
+
+To stay fast on large graphs, the wiki-link graph and code back-refs are aggregated **once** up front (rather than calling [[src/cli/section.ts#getSection]] per section, which would re-scan the repo each time).
+
+### Client search
+
+The static site has no server, so search is **client-side and lexical**: `lat build` ships a `search-index.json` (one entry per section: heading, first paragraph, body text, URL), and the page runs BM25 over it via [[src/render/site.ts#bm25Search]].
+
+That scorer is a pure function injected into the page through `.toString()`, so the shipped client and the unit tests run identical code.
+
+This is BM25 only. A dense/semantic upgrade — shipping the document embeddings and embedding the query in-browser with Qwen via WASM, gated by the [[cli#search#Model Fingerprint]] (only possible when the index was built with the local model) — is a planned enhancement, not yet implemented.
+
+Implementation: [[src/cli/build.ts]], [[src/render/site.ts]]
 
 ## search
 
