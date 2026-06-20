@@ -650,26 +650,27 @@ async function setupLlmKey(rl) {
     const existingKey = getLlmKey();
     if (existingKey) {
         console.log('');
-        console.log(styleText('green', 'Semantic search') + ' — LLM key found. Ready.');
+        console.log(styleText('green', 'Semantic search') + ' — remote LLM key found. Ready.');
         return;
     }
-    // No key found — explain what semantic search is and prompt
+    // No remote key — semantic search still works out of the box via the local
+    // model. Explain that, and offer an optional remote key.
     console.log('');
     console.log(styleText('bold', 'Semantic search'));
     console.log('');
     console.log('  lat.md includes semantic search (' +
         styleText('cyan', 'lat search') +
         ') that lets agents find');
-    console.log('  relevant documentation by meaning, not just keywords. This requires an');
-    console.log('  embedding API key (OpenAI or Vercel AI Gateway). Without it, agents can still');
-    console.log('  use ' +
-        styleText('cyan', 'lat locate') +
-        ' for exact lookups, but will miss semantic matches.');
+    console.log('  relevant documentation by meaning, not just keywords. It works ' +
+        styleText('green', 'out of the box'));
+    console.log('  with a local embedding model (downloaded on first search, no token needed).');
+    console.log('  Optionally, set a remote embedding key (OpenAI or Vercel AI Gateway) for');
+    console.log('  cloud-based embeddings instead.');
     console.log('');
     // Interactive prompt
     if (!rl) {
-        console.log(styleText('yellow', '  No LLM key found.') +
-            ' Set LAT_LLM_KEY env var or run ' +
+        console.log(styleText('dim', '  Using the local embedding model.') +
+            ' Set LAT_LLM_KEY for a remote provider, or run ' +
             styleText('cyan', 'lat init') +
             ' interactively.');
         return;

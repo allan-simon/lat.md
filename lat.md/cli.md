@@ -152,7 +152,7 @@ Steps:
 3. **Command style** — if any selected agent needs a lat command reference (all except Codex), a `selectMenu` asks "How should agents run lat?" with three options: `lat` (global install, portable), the resolved local binary path, or `npx lat.md@latest` (slow but zero-install). The choice determines what command string is written into hooks, MCP configs, and Pi extensions. Non-interactive mode defaults to `local`. Choosing `global` or `npx` makes generated config files portable and safe to commit.
 4. **AGENTS.md** — created if a non-Claude agent is selected (Cursor, Copilot, Codex). Shared instruction file. Uses marker-based append mode (see below).
 5. **Per-agent setup** — configures each selected agent (see subsections below). Each step prints a brief explanation of _why_ it's needed (e.g. why a hook is used instead of CLAUDE.md, why MCP is registered alongside CLI access).
-6. **LLM key setup** — checks for an existing key (env var or [[cli#Configuration File]]), and if missing, interactively prompts the user to paste one. Explains what semantic search is and why a key is needed before asking.
+6. **LLM key setup** — checks for an existing *remote* key (env var or [[cli#Configuration File]]). If found, reports it's ready; otherwise explains that semantic search already works out of the box via the local model ([[cli#search#Local Mode]]) and offers to optionally paste a remote key for cloud embeddings.
 7. **Version stamp + file hashes** — writes `INIT_VERSION` and SHA-256 hashes of all template-generated files to `lat.md/.cache/lat_init.json`. On re-run, compares current file content against stored hashes: unmodified files are silently updated to the latest template; user-modified files trigger a Y/n prompt offering to overwrite with the latest template, declining suggests [[cli#gen]].
 8. **Next steps** — after all setup completes, prints agent-specific guidance for having the agent document the codebase. For Claude Code, shows a runnable `claude "..."` command. For IDE agents (Cursor, Copilot, Pi, OpenCode, Codex), shows the prompt to paste into agent chat. Both suggest running `lat check` when done.
 
@@ -308,19 +308,25 @@ Query is optional — `lat search --reindex` re-indexes without searching. Resul
 
 Core search logic in [[src/cli/search.ts#runSearch]] (returns matched sections, each with a bounded relevance `score`), used by both the CLI command and [[cli#mcp]] `lat_search` tool. Indexing and embedding internals in `src/search/`.
 
-Each result carries a transparent `score` ([[cli#search#Score Components]]). After the dense top-k is found, results are expanded along the wiki-link graph ([[cli#search#Graph Expansion]]). Search never hard-fails: a missing key or embedding error degrades to a keyword search ([[cli#search#Keyword Fallback]]) rather than erroring.
+Each result carries a transparent `score` ([[cli#search#Score Components]]). After the dense top-k is found, results are expanded along the wiki-link graph ([[cli#search#Graph Expansion]]). Search never hard-fails: an embedding error degrades to a keyword search ([[cli#search#Keyword Fallback]]) rather than erroring.
 
 ### Provider Detection
 
-Requires an LLM key resolved by [[src/config.ts#getLlmKey]] in priority order:
+lat.md is **local-first**: with no token configured, semantic search runs against the in-process [[cli#search#Local Mode]] model — no key required. A remote provider is used only when an OpenAI or Vercel key is explicitly configured.
+
+The *effective* key is resolved by [[src/config.ts#getEffectiveKey]], which wraps the explicit-key resolver [[src/config.ts#getLlmKey]] (priority order below) and defaults to `'local'` when nothing is set:
 
 1. `LAT_LLM_KEY` env var — direct value
 2. `LAT_LLM_KEY_FILE` env var — path to a file containing the key (read and trimmed)
 3. `LAT_LLM_KEY_HELPER` env var — shell command that prints the key to stdout (10 s timeout)
 4. `llm_key` from config file (see [[cli#Configuration File]])
+5. *(none of the above)* → `'local'` (in-process model, no token)
+
+Setting `LAT_EMBED_PROVIDER=none` opts out of embeddings entirely — [[src/config.ts#getEffectiveKey]] returns `undefined` and search uses the [[cli#search#Keyword Fallback]] with no model download. This is the escape hatch for users who want neither a token nor the local GGUF.
 
 Provider is auto-detected from the resolved key prefix:
 
+- *(no key / default)* — in-process [[cli#search#Local Mode]] (Qwen3-0.6B, 1024 dims)
 - `sk-...` — OpenAI (uses `text-embedding-3-small`, 1536 dims)
 - `vck_...` — Vercel AI Gateway (uses `openai/text-embedding-3-small`, 1536 dims)
 - `sk-ant-...` — Anthropic (not supported, errors with guidance)
@@ -340,7 +346,9 @@ Implementation: [[src/search/embeddings.ts]]
 
 ### Local Mode
 
-An in-process, offline embedding provider that runs a GGUF model directly — no API key, no daemon, no hosted call. Selected via `LAT_LLM_KEY=local:qwen3-0.6b` (a `local:` branch in [[src/search/provider.ts#detectProvider]]) or `LAT_EMBED_PROVIDER=local` (synthesized into a `local` key by [[src/config.ts#getLlmKey]]).
+An in-process, offline embedding provider that runs a GGUF model directly — no API key, no daemon, no hosted call. This is the **default** when no remote key is configured ([[src/config.ts#getEffectiveKey]] returns `'local'`).
+
+It can also be selected explicitly via `LAT_LLM_KEY=local:qwen3-0.6b` (a `local:` branch in [[src/search/provider.ts#detectProvider]]) or `LAT_EMBED_PROVIDER=local`.
 
 The model is **Qwen3-Embedding-0.6B** (`Qwen3-Embedding-0.6B-Q8_0.gguf`, ~639 MB, 1024-dim), downloaded lazily to the XDG cache dir ([[src/search/local.ts#modelCacheDir]]) on first use via [[src/search/local.ts#ensureModelFile]]. It streams to a unique per-attempt temp file (`<dest>.<pid>.<uuid>.part`), validates the streamed size against `Content-Length`, then atomically renames onto the final path — so an interrupted/failed download leaves no partial GGUF (the temp is unlinked on error) and concurrent first-use processes never clobber each other. Not resumable: a failed download restarts.
 
@@ -427,7 +435,9 @@ Implementation: [[src/search/search.ts#distanceToScore]], surfaced in [[src/form
 
 ### Keyword Fallback
 
-Search never hard-fails. When no LLM key is configured, or when the embedding/provider call throws, `lat search` degrades to a keyword/heading search over the corpus instead of erroring.
+Search never hard-fails. When embeddings are opted out (`LAT_EMBED_PROVIDER=none`) or the embedding call throws (including a failed local-model download), `lat search` degrades to a keyword/heading search instead of erroring.
+
+This is no longer the default for an unconfigured project — that now uses the local model ([[cli#search#Local Mode]]). The opt-out makes [[src/config.ts#getEffectiveKey]] return `undefined`, which routes [[src/cli/search.ts#runSearch]] to the keyword path.
 
 [[src/search/keyword.ts#keywordSearch]] scores each section by query-token overlap over its heading (weighted double) and body, bounded to `[0, 1]`, and returns the top hits labelled `keyword fallback (no embeddings)`. A one-line dim note is printed to stderr (CLI mode only) so the user knows semantic search was unavailable. The MCP path no longer returns `isError` for a missing key — it degrades like the CLI; `isError` is reserved for genuinely unexpected failures.
 

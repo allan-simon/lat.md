@@ -17,9 +17,9 @@ This fork makes `lat search` work **fully locally** — no cloud embedding API, 
 
 **What's added vs upstream:**
 
-1. **Local embedding provider** — Qwen3-Embedding-0.6B (GGUF, ~640 MB) run **in-process on CPU** via `node-llama-cpp`. Enable with `LAT_EMBED_PROVIDER=local` (or `LAT_LLM_KEY=local:qwen3-0.6b`). No API key, no daemon. `node-llama-cpp` is an *optional* dependency; the OpenAI/Vercel HTTP path is unchanged when it isn't installed.
+1. **Local embedding provider, on by default** — Qwen3-Embedding-0.6B (GGUF, ~640 MB) run **in-process on CPU** via `node-llama-cpp`. This is now the **default**: with no token configured, `lat search` embeds locally (model downloaded on first use). Set an OpenAI/Vercel key only if you *want* a remote provider, or `LAT_EMBED_PROVIDER=none` to skip embeddings entirely. `node-llama-cpp` is an *optional* dependency; the OpenAI/Vercel HTTP path is unchanged when it isn't installed.
 2. **Hybrid retrieval** — dense vectors fused with **SQLite FTS5 / BM25** (per-query min-max, `DENSE_WEIGHT = 0.75`). Real queries are terse keyword/identifier bags where pure dense underperforms.
-3. **Never-fail degradation** — with no embedding key/model available, `lat search` falls back to keyword search instead of throwing.
+3. **Never-fail degradation** — with embeddings opted out (`LAT_EMBED_PROVIDER=none`) or a model/provider error, `lat search` falls back to keyword search instead of throwing.
 4. **Model-fingerprint auto-rebuild** — the index records `provider:model:dims` and rebuilds itself on a model change (fixes a latent upstream bug where switching models silently returned garbage).
 5. **Chunk-and-pool** long sections (> ~300 words) — fixes silent 512-token truncation for short-context local models.
 6. **Graph-expansion re-ranking** — BFS 1 hop over the validated `[[wiki-link]]` graph, neighbours added at a 0.5× discount (never outrank direct hits).
@@ -37,8 +37,8 @@ This fork makes `lat search` work **fully locally** — no cloud embedding API, 
 A 2025 0.6B model on a laptop CPU matches the cloud API; adding BM25 edges past it. Bigger models and a GPU bought ~nothing on this corpus.
 
 ```bash
-# fully local: in-process Qwen3-0.6B on CPU + hybrid dense/BM25, no key
-LAT_EMBED_PROVIDER=local lat search "how are downloads rate-limited per plan"
+# fully local by default: in-process Qwen3-0.6B on CPU + hybrid dense/BM25, no key
+lat search "how are downloads rate-limited per plan"
 ```
 
 ---
@@ -106,12 +106,14 @@ lat mcp                         # start MCP server for editor integration
 
 ## Configuration
 
-Semantic search (`lat search`) requires an OpenAI (`sk-...`) or Vercel AI Gateway (`vck_...`) API key. The key is resolved in order:
+Semantic search (`lat search`) works out of the box with **no key** — it defaults to the in-process local model. Configure an OpenAI (`sk-...`) or Vercel AI Gateway (`vck_...`) API key only to use a remote provider instead. The key is resolved in order:
 
 1. `LAT_LLM_KEY` env var — direct value
 2. `LAT_LLM_KEY_FILE` env var — path to a file containing the key
 3. `LAT_LLM_KEY_HELPER` env var — shell command that prints the key (10s timeout)
 4. Config file — saved by `lat init`. Run `lat config` to see its location.
+
+With none of the above set, lat.md uses the local model. Set `LAT_EMBED_PROVIDER=none` to opt out of embeddings entirely (keyword-only search, no model download).
 
 ## Development
 

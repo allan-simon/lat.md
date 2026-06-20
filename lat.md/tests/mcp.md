@@ -40,7 +40,7 @@ Semantic search via `lat_search` for a login/security query returns results cont
 ## lat_search finds performance section
 Semantic search for a latency/response-times query returns results containing the Performance section.
 
-## lat_search degrades to keyword fallback without a key
-When `LAT_LLM_KEY` is not set, `lat_search` no longer errors — it degrades to the keyword fallback over section headings/content (see [[cli#search#Keyword Fallback]]).
+## lat_search degrades to keyword fallback when embeddings are opted out
+When embeddings are explicitly disabled with `LAT_EMBED_PROVIDER=none` (no key and no local model), `lat_search` no longer errors — it degrades to the keyword fallback over section headings/content (see [[cli#search#Keyword Fallback]]).
 
 A heading-overlapping query still finds the section, the result is not an error, and the output is labelled "keyword fallback".

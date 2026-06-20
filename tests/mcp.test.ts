@@ -181,14 +181,20 @@ describe.skipIf(!canRunSearch)('mcp search (rag)', () => {
     expect(text).toContain('Performance');
   });
 
-  // @lat: [[tests/mcp#lat_search degrades to keyword fallback without a key]]
-  it('lat_search degrades to keyword fallback when key is missing', async () => {
-    // Spin up a separate MCP server without LAT_LLM_KEY and without XDG config
+  // @lat: [[tests/mcp#lat_search degrades to keyword fallback when embeddings are opted out]]
+  it('lat_search degrades to keyword fallback when embeddings are opted out', async () => {
+    // Spin up a separate MCP server with embeddings explicitly disabled
+    // (LAT_EMBED_PROVIDER=none) so no key and no local model are used.
     const transport2 = new StdioClientTransport({
       command: 'node',
       args: [cliPath, 'mcp'],
       cwd: tmp,
-      env: { ...process.env, LAT_LLM_KEY: '', XDG_CONFIG_HOME: tmp },
+      env: {
+        ...process.env,
+        LAT_LLM_KEY: '',
+        LAT_EMBED_PROVIDER: 'none',
+        XDG_CONFIG_HOME: tmp,
+      },
     });
     const client2 = new Client({ name: 'test2', version: '0.1' });
     await client2.connect(transport2);

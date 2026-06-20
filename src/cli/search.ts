@@ -266,18 +266,20 @@ export async function searchCommand(
   opts: { limit: number; reindex?: boolean },
   progress?: IndexProgress,
 ): Promise<CmdResult> {
-  const { getLlmKey } = await import('../config.js');
-  // A thrown getLlmKey() (e.g. empty key file, failing helper) is recoverable:
-  // treat it as "no usable key" and degrade rather than erroring out.
+  const { getEffectiveKey } = await import('../config.js');
+  // A thrown key resolution (e.g. empty key file, failing helper) is
+  // recoverable: fall back to the local model rather than erroring out.
+  // lat.md is local-first, so a key is undefined only when embeddings are
+  // explicitly opted out (LAT_EMBED_PROVIDER=none → keyword-only).
   let key: string | undefined;
   try {
-    key = getLlmKey();
+    key = getEffectiveKey();
   } catch {
-    key = undefined;
+    key = 'local';
   }
 
   if (!query) {
-    // Index-only mode needs embeddings; without a key there's nothing to do.
+    // Index-only mode (--reindex). Nothing to do when embeddings are opted out.
     if (!key) {
       noteFallback(ctx, key);
       return { output: '' };

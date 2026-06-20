@@ -18,3 +18,15 @@ export declare function writeConfig(config: LatConfig): void;
  * if also set). Returns undefined if nothing is configured.
  */
 export declare function getLlmKey(): string | undefined;
+/**
+ * The key actually used for embeddings. lat.md is **local-first**: with nothing
+ * configured it returns `'local'`, selecting the in-process GGUF model (see
+ * [[cli#search#Local Mode]]) so semantic search works out of the box with no
+ * token. A remote provider is used only when an OpenAI (`sk-...`) or Vercel
+ * (`vck_...`) key is explicitly configured via [[src/config.ts#getLlmKey]].
+ *
+ * Returns `undefined` only when the user explicitly opts out of embeddings with
+ * `LAT_EMBED_PROVIDER=none` — search then falls back to keyword/heading
+ * matching with no model download.
+ */
+export declare function getEffectiveKey(): string | undefined;

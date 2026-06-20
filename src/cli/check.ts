@@ -550,11 +550,11 @@ export async function checkAllCommand(ctx: CmdContext): Promise<CmdResult> {
   }
   if (!hasKey) {
     lines.push(
-      s.yellow('Warning:') +
-        ' No LLM key found — semantic search (lat search) will not work.' +
-        ' Provide a key via LAT_LLM_KEY, LAT_LLM_KEY_FILE, LAT_LLM_KEY_HELPER, or run ' +
-        s.cyan('lat init') +
-        ' to configure.',
+      s.dim(
+        'Note: no remote LLM key configured — semantic search (lat search) uses the ' +
+          'local embedding model (downloaded on first run). Set LAT_LLM_KEY to an ' +
+          'OpenAI (sk-...) or Vercel (vck_...) key to use a remote provider instead.',
+      ),
     );
   }
 
