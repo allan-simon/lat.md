@@ -4,7 +4,9 @@ import { join, isAbsolute, relative } from 'node:path';
 import { loadAllSections, flattenSections, listLatticeFiles, buildFileIndex, resolveRef, extractRefs, } from '../lattice.js';
 import { scanCodeRefs } from '../code-refs.js';
 import { isSourceTarget } from '../render/html.js';
-import { buildResolver, buildSidebar, buildSectionContent, renderPage, STATIC_EMBED_MODEL, } from '../render/site.js';
+import { buildResolver, buildSidebar, buildSectionContent, renderPage, graphPageContent, graphScript, STATIC_EMBED_MODEL, } from '../render/site.js';
+import { buildGraphData } from '../graph.js';
+const GRAPH_HREF = 'graph.html';
 /** A filesystem-safe slug for a section id (collisions disambiguated by caller). */
 function slugify(id) {
     return (id
@@ -131,6 +133,7 @@ export async function buildCommand(ctx, opts) {
         const html = renderPage({
             title: section.heading,
             homeHref: 'index.html',
+            graphHref: GRAPH_HREF,
             sidebar,
             content: body,
             search: { mode: 'static', indexHref: 'search-index.json' },
@@ -165,11 +168,32 @@ export async function buildCommand(ctx, opts) {
     await writeFile(join(outDir, 'index.html'), renderPage({
         title: 'lat.md',
         homeHref: 'index.html',
+        graphHref: GRAPH_HREF,
         sidebar,
         content: '<h1>lat.md</h1><p>Browse the knowledge graph in the sidebar, or search above.</p>',
         search: { mode: 'static', indexHref: 'search-index.json' },
     }));
     await writeFile(join(outDir, 'search-index.json'), JSON.stringify(searchIndex));
+    // Graph page + data. Edges are derived from the already-aggregated link map
+    // (no extra file walk).
+    const edges = [];
+    for (const [fromLower, inner] of outgoing) {
+        const from = byId.get(fromLower);
+        if (!from)
+            continue;
+        for (const to of inner.values())
+            edges.push({ source: from.id, target: to.id });
+    }
+    await writeFile(join(outDir, 'graph.json'), JSON.stringify(buildGraphData(allSections, edges, sectionUrl)));
+    await writeFile(join(outDir, 'graph.html'), renderPage({
+        title: 'Graph',
+        homeHref: 'index.html',
+        graphHref: GRAPH_HREF,
+        sidebar,
+        content: graphPageContent(),
+        search: { mode: 'static', indexHref: 'search-index.json' },
+        extraScript: graphScript('graph.json'),
+    }));
     // Copy interactive widgets, if any.
     const widgetsSrc = join(latDir, '_widgets');
     if (existsSync(widgetsSrc)) {

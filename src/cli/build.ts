@@ -20,9 +20,14 @@ import {
   buildSidebar,
   buildSectionContent,
   renderPage,
+  graphPageContent,
+  graphScript,
   STATIC_EMBED_MODEL,
   type SectionUrl,
 } from '../render/site.js';
+import { buildGraphData, type GraphEdge } from '../graph.js';
+
+const GRAPH_HREF = 'graph.html';
 
 /** A filesystem-safe slug for a section id (collisions disambiguated by caller). */
 function slugify(id: string): string {
@@ -181,6 +186,7 @@ export async function buildCommand(
     const html = renderPage({
       title: section.heading,
       homeHref: 'index.html',
+      graphHref: GRAPH_HREF,
       sidebar,
       content: body,
       search: { mode: 'static', indexHref: 'search-index.json' },
@@ -225,6 +231,7 @@ export async function buildCommand(
     renderPage({
       title: 'lat.md',
       homeHref: 'index.html',
+      graphHref: GRAPH_HREF,
       sidebar,
       content:
         '<h1>lat.md</h1><p>Browse the knowledge graph in the sidebar, or search above.</p>',
@@ -234,6 +241,32 @@ export async function buildCommand(
   await writeFile(
     join(outDir, 'search-index.json'),
     JSON.stringify(searchIndex),
+  );
+
+  // Graph page + data. Edges are derived from the already-aggregated link map
+  // (no extra file walk).
+  const edges: GraphEdge[] = [];
+  for (const [fromLower, inner] of outgoing) {
+    const from = byId.get(fromLower);
+    if (!from) continue;
+    for (const to of inner.values())
+      edges.push({ source: from.id, target: to.id });
+  }
+  await writeFile(
+    join(outDir, 'graph.json'),
+    JSON.stringify(buildGraphData(allSections, edges, sectionUrl)),
+  );
+  await writeFile(
+    join(outDir, 'graph.html'),
+    renderPage({
+      title: 'Graph',
+      homeHref: 'index.html',
+      graphHref: GRAPH_HREF,
+      sidebar,
+      content: graphPageContent(),
+      search: { mode: 'static', indexHref: 'search-index.json' },
+      extraScript: graphScript('graph.json'),
+    }),
   );
 
   // Copy interactive widgets, if any.

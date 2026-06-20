@@ -71,6 +71,9 @@ a { color:var(--accent); text-decoration:none; } a:hover { text-decoration:under
 .admonition-important { border-left-color:#bb9af7; } .admonition-important .admonition-title { color:#bb9af7; }
 .admonition-warning, .admonition-caution { border-left-color:#e0af68; } .admonition-warning .admonition-title, .admonition-caution .admonition-title { color:#e0af68; }
 .admonition-danger { border-left-color:#f7768e; } .admonition-danger .admonition-title { color:#f7768e; }
+.graphlink { font-size:.8rem; font-weight:400; }
+.dim { color:var(--dim); }
+#graph { display:block; width:100%; height:78vh; border:1px solid var(--border); border-radius:8px; background:#0c0e13; }
 `;
 // ── Search client scripts (server vs static) ────────────────────────
 /** Shared renderer for a result list; both modes produce `{url,heading,score,firstParagraph}`. */
@@ -247,7 +250,7 @@ export function renderPage(opts) {
 </head><body>
 <div class="layout">
   <aside class="sidebar">
-    <div class="brand"><a href="${opts.homeHref}">lat.md</a></div>
+    <div class="brand"><a href="${opts.homeHref}">lat.md</a> <a class="graphlink" href="${opts.graphHref}">graph</a></div>
     <div class="search"><input id="q" type="search" placeholder="Search the graph…" autocomplete="off"></div>
     <div id="results"></div>
     <nav id="tree">${opts.sidebar}</nav>
@@ -259,7 +262,58 @@ export function renderPage(opts) {
   mermaid.initialize({ startOnLoad: true, theme: 'dark' });
 </script>
 <script>${searchScript(opts.search)}</script>
+${opts.extraScript ? `<script>${opts.extraScript}</script>` : ''}
 </body></html>`;
+}
+/** Content block for the graph page: a full-bleed canvas the force sim draws into. */
+export function graphPageContent() {
+    return '<h1>Graph</h1><p class="dim">Force-directed view of the wiki-link graph. Drag nodes, scroll to zoom, click to open.</p><canvas id="graph"></canvas>';
+}
+/**
+ * Vanilla canvas force-directed graph renderer (no deps). Fetches the graph
+ * payload from `__GRAPH_HREF__`, simulates repulsion + edge springs + center
+ * gravity, and lets the user drag nodes, scroll to zoom, hover for a label, and
+ * click to open a section. See [[cli#graph]].
+ */
+const GRAPH_SCRIPT = `(function(){
+  var canvas = document.getElementById('graph'); if (!canvas) return;
+  var ctx = canvas.getContext('2d'), W = 0, H = 0;
+  function resize(){ W = canvas.width = canvas.clientWidth; H = canvas.height = canvas.clientHeight; }
+  fetch('__GRAPH_HREF__').then(function(r){ return r.json(); }).then(function(g){
+    resize(); window.addEventListener('resize', resize);
+    var nodes = g.nodes.map(function(n){ return { id:n.id, heading:n.heading, url:n.url, x:W/2+(Math.random()-0.5)*300, y:H/2+(Math.random()-0.5)*300, vx:0, vy:0, deg:0 }; });
+    var idx = {}; nodes.forEach(function(n,i){ idx[n.id]=i; });
+    var edges = g.edges.map(function(e){ return { s:idx[e.source], t:idx[e.target] }; }).filter(function(e){ return e.s!=null && e.t!=null; });
+    edges.forEach(function(e){ nodes[e.s].deg++; nodes[e.t].deg++; });
+    var hover=null, dragging=null, ox=0, oy=0, scale=1;
+    function rOf(n){ return 4 + Math.min(9, n.deg); }
+    function tick(){
+      for (var i=0;i<nodes.length;i++){ for (var j=i+1;j<nodes.length;j++){ var a=nodes[i],b=nodes[j]; var dx=a.x-b.x,dy=a.y-b.y; var d2=dx*dx+dy*dy+0.01; var d=Math.sqrt(d2); var f=2500/d2; var fx=f*dx/d, fy=f*dy/d; a.vx+=fx;a.vy+=fy;b.vx-=fx;b.vy-=fy; } }
+      edges.forEach(function(e){ var a=nodes[e.s],b=nodes[e.t]; var dx=b.x-a.x,dy=b.y-a.y; var d=Math.sqrt(dx*dx+dy*dy)+0.01; var f=(d-90)*0.01; var fx=f*dx/d,fy=f*dy/d; a.vx+=fx;a.vy+=fy;b.vx-=fx;b.vy-=fy; });
+      nodes.forEach(function(n){ n.vx+=(W/2-n.x)*0.0015; n.vy+=(H/2-n.y)*0.0015; n.vx*=0.85; n.vy*=0.85; if (n!==dragging){ n.x+=n.vx; n.y+=n.vy; } });
+    }
+    function draw(){
+      ctx.clearRect(0,0,W,H); ctx.save(); ctx.translate(ox,oy); ctx.scale(scale,scale);
+      ctx.strokeStyle='rgba(122,162,247,0.18)'; ctx.lineWidth=1;
+      edges.forEach(function(e){ var a=nodes[e.s],b=nodes[e.t]; ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke(); });
+      nodes.forEach(function(n){ var r=rOf(n); ctx.beginPath(); ctx.arc(n.x,n.y,r,0,7); ctx.fillStyle = n===hover ? '#e0af68' : '#7aa2f7'; ctx.fill(); });
+      if (hover){ ctx.fillStyle='#e6e6e6'; ctx.font='13px sans-serif'; ctx.fillText(hover.heading, hover.x+rOf(hover)+4, hover.y+4); }
+      ctx.restore();
+    }
+    function loop(){ for (var k=0;k<2;k++) tick(); draw(); requestAnimationFrame(loop); }
+    loop();
+    function at(ev){ var rect=canvas.getBoundingClientRect(); return { x:(ev.clientX-rect.left-ox)/scale, y:(ev.clientY-rect.top-oy)/scale }; }
+    function pick(p){ for (var i=nodes.length-1;i>=0;i--){ var n=nodes[i], r=rOf(n)+3; if ((n.x-p.x)*(n.x-p.x)+(n.y-p.y)*(n.y-p.y) < r*r) return n; } return null; }
+    var moved=false;
+    canvas.addEventListener('mousemove', function(ev){ var p=at(ev); if (dragging){ dragging.x=p.x; dragging.y=p.y; dragging.vx=0; dragging.vy=0; moved=true; } else { hover=pick(p); canvas.style.cursor=hover?'pointer':'default'; } });
+    canvas.addEventListener('mousedown', function(ev){ dragging=pick(at(ev)); moved=false; });
+    canvas.addEventListener('mouseup', function(ev){ var n=pick(at(ev)); if (n && n===dragging && !moved) window.location.href=n.url; dragging=null; });
+    canvas.addEventListener('wheel', function(ev){ ev.preventDefault(); scale *= ev.deltaY<0 ? 1.1 : 0.9; }, { passive:false });
+  });
+})();`;
+/** The graph client script with its data URL substituted. */
+export function graphScript(graphHref) {
+    return GRAPH_SCRIPT.replace('__GRAPH_HREF__', graphHref);
 }
 /** Sidebar navigation: every section grouped by file, linked via `sectionUrl`. */
 export function buildSidebar(allSections, sectionUrl) {

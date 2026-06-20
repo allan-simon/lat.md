@@ -353,6 +353,16 @@ Using the same model on both ends — Node at build time and the browser at quer
 
 Implementation: [[src/cli/build.ts]], [[src/render/site.ts]]
 
+## graph
+
+An interactive force-directed view of the wiki-link graph, available in both [[cli#serve]] (at `/graph`) and [[cli#build]] (as `graph.html`). Every page links to it from the sidebar.
+
+The graph data is `{nodes, edges}` built by [[src/graph.ts#buildGraphData]] — nodes are sections that participate in at least one link (isolated sections are omitted), each carrying its page URL; edges are section→section [[parser#Wiki Links]]. `serve` computes the edges per request with [[src/graph.ts#collectEdges]] (served at `/api/graph`); `build` derives the same edges from its already-aggregated link map and writes `graph.json`.
+
+The renderer is a dependency-free vanilla `<canvas>` force simulation (repulsion + edge springs + center gravity) shipped via [[src/render/site.ts#graphScript]]: drag nodes, scroll to zoom, hover for a label, click to open a section. Keeping it dep-free fits the zero-build front-end.
+
+Implementation: [[src/graph.ts]], [[src/render/site.ts]], wired in [[src/cli/serve.ts]] and [[src/cli/build.ts]]
+
 ## search
 
 Semantic search across `lat.md` sections using vector embeddings.

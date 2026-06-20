@@ -31,3 +31,4 @@ Shared patterns for writing and organizing tests in this project.
 - [[ts-fallback]] — Pure-TypeScript code-ref scanner fallback without ripgrep
 - [[render]] — Server-side markdown→HTML rendering for the docs server
 - [[build]] — Static site generation and client-side BM25 search
+- [[graph]] — Section-graph data for the interactive graph view

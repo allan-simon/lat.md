@@ -4,9 +4,11 @@ import { join, normalize, extname, sep } from 'node:path';
 import { loadAllSections } from '../lattice.js';
 import { getSection } from './section.js';
 import { escapeHtml } from '../render/html.js';
-import { buildResolver, buildSidebar, buildSectionContent, renderPage, lastSegment, } from '../render/site.js';
+import { buildResolver, buildSidebar, buildSectionContent, renderPage, graphPageContent, graphScript, lastSegment, } from '../render/site.js';
+import { collectEdges, buildGraphData } from '../graph.js';
 /** Section URL scheme for the live server: a query route handled by `/section`. */
 const sectionUrl = (id) => `/section?id=${encodeURIComponent(id)}`;
+const GRAPH_HREF = '/graph';
 // ── Widget static files ─────────────────────────────────────────────
 const MIME = {
     '.html': 'text/html; charset=utf-8',
@@ -102,6 +104,7 @@ export async function serveCommand(ctx, opts) {
                 res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }).end(renderPage({
                     title: 'lat.md',
                     homeHref: '/',
+                    graphHref: GRAPH_HREF,
                     sidebar: buildSidebar(allSections, sectionUrl),
                     content: '',
                     search: { mode: 'server' },
@@ -117,6 +120,7 @@ export async function serveCommand(ctx, opts) {
                         .end(renderPage({
                         title: 'Not found',
                         homeHref: '/',
+                        graphHref: GRAPH_HREF,
                         sidebar: buildSidebar(allSections, sectionUrl),
                         content: `<p>No section <code>${escapeHtml(id)}</code>.</p>`,
                         search: { mode: 'server' },
@@ -127,15 +131,37 @@ export async function serveCommand(ctx, opts) {
                 res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }).end(renderPage({
                     title: lastSegment(found.section.id),
                     homeHref: '/',
+                    graphHref: GRAPH_HREF,
                     sidebar: buildSidebar(allSections, sectionUrl),
                     content,
                     search: { mode: 'server' },
                 }));
                 return;
             }
+            if (path === '/api/graph') {
+                const edges = await collectEdges(ctx.latDir, ctx.projectRoot, allSections);
+                const data = buildGraphData(allSections, edges, sectionUrl);
+                res
+                    .writeHead(200, { 'Content-Type': 'application/json' })
+                    .end(JSON.stringify(data));
+                return;
+            }
+            if (path === '/graph') {
+                res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }).end(renderPage({
+                    title: 'Graph',
+                    homeHref: '/',
+                    graphHref: GRAPH_HREF,
+                    sidebar: buildSidebar(allSections, sectionUrl),
+                    content: graphPageContent(),
+                    search: { mode: 'server' },
+                    extraScript: graphScript('/api/graph'),
+                }));
+                return;
+            }
             res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8' }).end(renderPage({
                 title: 'Not found',
                 homeHref: '/',
+                graphHref: GRAPH_HREF,
                 sidebar: buildSidebar(allSections, sectionUrl),
                 content: '<p>Not found.</p>',
                 search: { mode: 'server' },
