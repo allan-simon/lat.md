@@ -13,3 +13,6 @@ node_modules
 
 # lat build output
 lat-docs/
+
+# eval scaffolding (regenerable)
+eval/corpus-dump.json

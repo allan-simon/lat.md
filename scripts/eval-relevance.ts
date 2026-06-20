@@ -225,7 +225,8 @@ async function embedAll(
 }
 
 async function main() {
-  const gold: Gold[] = (await readFile(join(ROOT, 'eval/gold.jsonl'), 'utf-8'))
+  const goldFile = process.env.EVAL_GOLD || 'eval/gold.jsonl';
+  const gold: Gold[] = (await readFile(join(ROOT, goldFile), 'utf-8'))
     .split('\n')
     .filter((l) => l.trim())
     .map((l) => JSON.parse(l));

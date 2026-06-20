@@ -1,0 +1,90 @@
+{"q": "how do I make the docs searchable without running a server?", "id": "lat.md/cli#CLI#build"}
+{"q": "offline embeddings no api key", "id": "lat.md/cli#CLI#search#Local Mode"}
+{"q": "what model is downloaded for local search and how big is it?", "id": "lat.md/cli#CLI#search#Local Mode"}
+{"q": "why does the CLI and MCP server never duplicate command logic?", "id": "lat.md/cli#CLI"}
+{"q": "rebuild index after switching embedding model", "id": "lat.md/cli#CLI#search#Model Fingerprint"}
+{"q": "what happens to the vector store when I change embedding dimensions?", "id": "lat.md/cli#CLI#search#Model Fingerprint", "alts": ["lat.md/tests/search#Search#Model Fingerprint"]}
+{"q": "turn off embeddings entirely", "id": "lat.md/cli#CLI#search#Provider Detection", "alts": ["lat.md/cli#CLI#search#Keyword Fallback"]}
+{"q": "order in which the embedding token is looked up", "id": "lat.md/cli#CLI#search#Provider Detection"}
+{"q": "where is the user-level api key stored on disk?", "id": "lat.md/cli#CLI#Configuration File"}
+{"q": "stop the agent from finishing with stale documentation", "id": "lat.md/cli#CLI#hook#Stop"}
+{"q": "when does the stop hook decide the docs are out of sync with code?", "id": "lat.md/cli#CLI#hook#Stop"}
+{"q": "what gets injected into the prompt before an agent starts work?", "id": "lat.md/cli#CLI#hook#UserPromptSubmit"}
+{"q": "expand bracket references in a user prompt", "id": "lat.md/cli#CLI#expand"}
+{"q": "command renamed from prompt", "id": "lat.md/cli#CLI#expand"}
+{"q": "find which sections point at a given function in my source", "id": "lat.md/cli#CLI#refs"}
+{"q": "limit a backlink search to only code comments", "id": "lat.md/cli#CLI#refs#Scope"}
+{"q": "fuzzy find a section when I only remember part of the heading", "id": "lat.md/cli#CLI#locate"}
+{"q": "how does locate rank exact matches versus typo matches?", "id": "lat.md/cli#CLI#locate"}
+{"q": "browse a section with its full content and backlinks", "id": "lat.md/cli#CLI#section"}
+{"q": "validate that every wiki link resolves", "id": "lat.md/cli#CLI#check#md"}
+{"q": "tip about installing ripgrep for faster scans", "id": "lat.md/cli#CLI#check"}
+{"q": "enforce that test specs are traced to actual test code", "id": "lat.md/cli#CLI#check#code-refs", "alts": ["lat.md/markdown#Markdown#Frontmatter#require-code-mention"]}
+{"q": "every folder needs an index file listing its contents", "id": "lat.md/cli#CLI#check#index"}
+{"q": "max length of a section's opening sentence", "id": "lat.md/cli#CLI#check#sections", "alts": ["lat.md/markdown#Markdown#Leading Paragraph"]}
+{"q": "generate an AGENTS.md template", "id": "lat.md/cli#CLI#gen"}
+{"q": "lat init wizard steps", "id": "lat.md/cli#CLI#init"}
+{"q": "checklist menu raw mode breaks readline", "id": "lat.md/cli#CLI#init"}
+{"q": "which two hooks does Claude Code setup install?", "id": "lat.md/cli#CLI#init#Claude Code"}
+{"q": "why does Cursor rely on rules and MCP instead of prompt hooks?", "id": "lat.md/cli#CLI#init#Cursor"}
+{"q": "Pi extension registers native tools", "id": "lat.md/cli#CLI#init#Pi"}
+{"q": "how does init reconstruct the command to launch lat from a tsx script?", "id": "lat.md/cli#CLI#init#Pi"}
+{"q": "OpenCode plugin session idle hook", "id": "lat.md/cli#CLI#init#OpenCode"}
+{"q": "Codex MCP server registered in a toml table", "id": "lat.md/cli#CLI#init#Codex"}
+{"q": "preserve my own edits when init rewrites CLAUDE.md", "id": "lat.md/cli#CLI#init#Marker-based append mode"}
+{"q": "what happens on re-init if I edited the managed block myself?", "id": "lat.md/cli#CLI#init#Marker-based append mode"}
+{"q": "start the MCP server over stdio", "id": "lat.md/cli#CLI#mcp"}
+{"q": "which six tools does the MCP server expose?", "id": "lat.md/cli#CLI#mcp"}
+{"q": "run a local docs website with live search", "id": "lat.md/cli#CLI#serve"}
+{"q": "do I need to restart serve after editing a section?", "id": "lat.md/cli#CLI#serve"}
+{"q": "what endpoints does the serve http server expose?", "id": "lat.md/cli#CLI#serve#Routes"}
+{"q": "how are mermaid diagrams rendered in the html output?", "id": "lat.md/cli#CLI#serve#Rendering"}
+{"q": "callout boxes like note and warning in rendered docs", "id": "lat.md/cli#CLI#serve#Rendering", "alts": ["lat.md/tests/render#Render#MyST admonitions"]}
+{"q": "embed interactive mini apps in a section page", "id": "lat.md/cli#CLI#serve#Widgets"}
+{"q": "why are the built html files flat filenames instead of nested paths?", "id": "lat.md/cli#CLI#build"}
+{"q": "ship dense vectors for in-browser semantic search", "id": "lat.md/cli#CLI#build#Client search"}
+{"q": "which tiny model embeds the static site queries in the browser?", "id": "lat.md/cli#CLI#build#Client search"}
+{"q": "interactive force-directed visualization of links", "id": "lat.md/cli#CLI#graph"}
+{"q": "are isolated sections shown in the graph view?", "id": "lat.md/cli#CLI#graph"}
+{"q": "semantic search command basics", "id": "lat.md/cli#CLI#search"}
+{"q": "reindex without performing a search", "id": "lat.md/cli#CLI#search"}
+{"q": "how does query embedding differ from document embedding?", "id": "lat.md/cli#CLI#search#Embeddings"}
+{"q": "what database backs the vector store?", "id": "lat.md/cli#CLI#search#Storage"}
+{"q": "where is the vector db file kept and should I commit it?", "id": "lat.md/cli#CLI#search#Storage"}
+{"q": "only re-embed sections that changed", "id": "lat.md/cli#CLI#search#Indexing"}
+{"q": "splitting long sections into overlapping windows before embedding", "id": "lat.md/cli#CLI#search#Chunk and Pool"}
+{"q": "why chunk sections — what gets dropped otherwise?", "id": "lat.md/cli#CLI#search#Chunk and Pool"}
+{"q": "combine semantic ranking with keyword bm25 ranking", "id": "lat.md/cli#CLI#search#Hybrid Search"}
+{"q": "what is the dense weight when fusing the two rankings?", "id": "lat.md/cli#CLI#search#Hybrid Search", "alts": ["lat.md/cli#CLI#search#Score Components"]}
+{"q": "search falls back to keywords when embeddings fail", "id": "lat.md/cli#CLI#search#Keyword Fallback"}
+{"q": "pull in linked sections that don't match the query directly", "id": "lat.md/cli#CLI#search#Graph Expansion"}
+{"q": "can a graph-expanded neighbour outrank the direct hit?", "id": "lat.md/cli#CLI#search#Graph Expansion"}
+{"q": "how is a cosine distance turned into a 0 to 1 relevance score?", "id": "lat.md/cli#CLI#search#Score Components"}
+{"q": "which package manager must I use for this project?", "id": "lat.md/dev-process#Dev Process#Package Manager"}
+{"q": "does the test run include type checking?", "id": "lat.md/dev-process#Dev Process#Testing#Typecheck Test"}
+{"q": "single entry point for directory walking with gitignore support", "id": "lat.md/dev-process#Dev Process#File Walking"}
+{"q": "how does scanning for code refs use ripgrep with a fallback?", "id": "lat.md/dev-process#Dev Process#File Walking"}
+{"q": "prettier config no semicolons single quotes", "id": "lat.md/dev-process#Dev Process#Formatting"}
+{"q": "steps to cut a release", "id": "lat.md/dev-process#Dev Process#Publishing#Release Process"}
+{"q": "npm trusted publishing with provenance", "id": "lat.md/dev-process#Dev Process#Publishing#Publish Workflow"}
+{"q": "what gets included in the published npm package?", "id": "lat.md/dev-process#Dev Process#Publishing"}
+{"q": "obsidian style double bracket links and alias divider", "id": "lat.md/markdown#Markdown#Wiki Links"}
+{"q": "can I omit intermediate headings in a wiki link path?", "id": "lat.md/markdown#Markdown#Wiki Links#Resolution Rules"}
+{"q": "using a bare filename without its folder in a link", "id": "lat.md/markdown#Markdown#Wiki Links#Short Path Disambiguation", "alts": ["lat.md/parser#Parser#Short Ref Resolution"]}
+{"q": "link to a method on a class in a typescript file", "id": "lat.md/markdown#Markdown#Wiki Links#Source Code Links"}
+{"q": "which programming languages can wiki links point into?", "id": "lat.md/markdown#Markdown#Wiki Links#Source Code Links"}
+{"q": "difference between strict and lenient link resolution", "id": "lat.md/markdown#Markdown#Wiki Links#Strict vs Lenient Contexts"}
+{"q": "per-file yaml config to require code mentions", "id": "lat.md/markdown#Markdown#Frontmatter"}
+{"q": "why did they write their own wiki link parser instead of using a library?", "id": "lat.md/parser#Parser#Wiki Links"}
+{"q": "what fields does a parsed section object carry?", "id": "lat.md/parser#Parser#Sections"}
+{"q": "can the top level h1 heading be dropped in a reference?", "id": "lat.md/parser#Parser#Short Ref Resolution"}
+{"q": "replay recorded vectors instead of hitting a real embedding api in tests", "id": "lat.md/tests/search#Search#RAG Replay Tests"}
+{"q": "how do you record fresh vectors for the replay tests?", "id": "lat.md/tests/search#Search#RAG Replay Tests"}
+{"q": "test that an exact identifier the dense side misses is rescued by bm25", "id": "lat.md/tests/search#Search#Hybrid Fusion#FTS rescues an exact identifier"}
+{"q": "test that all-equal scores don't get zeroed in normalization", "id": "lat.md/tests/search#Search#Hybrid Fusion#Min-max normalization"}
+{"q": "test that a fts query can never be a syntax error", "id": "lat.md/tests/search#Search#Hybrid Fusion#FTS match expression"}
+{"q": "fake git script injected via PATH to control diff output in hook tests", "id": "lat.md/tests/hook#Hook"}
+{"q": "test that a markdown only diff does not trigger a sync reminder", "id": "lat.md/tests/hook#Hook#Ignores non-code files in diff"}
+{"q": "pure typescript code scanner matches the ripgrep results", "id": "lat.md/tests/ts-fallback#TS Fallback"}
+{"q": "parse then re-render must produce identical markdown", "id": "lat.md/tests/roundtrip#Roundtrip"}
+{"q": "what is the changelog limit shown on the marketing site?", "id": "lat.md/website#Website#Current State"}
