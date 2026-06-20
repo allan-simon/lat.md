@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { readFile, rm, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { bm25Search, type SearchDoc } from '../src/render/site.js';
+import { bm25Search, staticSearch, type SearchDoc } from '../src/render/site.js';
 import { buildCommand } from '../src/cli/build.js';
 import { plainStyler } from '../src/context.js';
 
@@ -26,6 +26,29 @@ describe('bm25Search', () => {
 
   it('returns an empty list for an empty query', () => {
     expect(bm25Search('', DOCS)).toEqual([]);
+  });
+});
+
+// @lat: [[tests/build#Hybrid static search]]
+describe('staticSearch (hybrid)', () => {
+  const docs: SearchDoc[] = [
+    { url: 'a.html', heading: 'Alpha', firstParagraph: '', text: 'apple apple', vec: [1, 0] },
+    { url: 'b.html', heading: 'Beta', firstParagraph: '', text: 'banana', vec: [0, 1] },
+  ];
+
+  it('is BM25-only when no query vector is given', () => {
+    // "apple" only matches Alpha lexically.
+    expect(staticSearch('apple', docs, null)[0].url).toBe('a.html');
+  });
+
+  it('lets a dense query vector outrank the lexical match', () => {
+    // Query vector points at Beta; fused 0.75 dense / 0.25 bm25 flips the order.
+    expect(staticSearch('apple', docs, [0, 1])[0].url).toBe('b.html');
+  });
+
+  it('falls back to BM25 when docs carry no vectors, even if a query vector is passed', () => {
+    const noVec = docs.map(({ vec: _vec, ...d }) => d);
+    expect(staticSearch('apple', noVec, [0, 1])[0].url).toBe('a.html');
   });
 });
 

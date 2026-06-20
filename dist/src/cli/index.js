@@ -175,10 +175,11 @@ program
     .command('build')
     .description('Build a static HTML docs site from the lat.md graph')
     .option('--out <dir>', 'output directory', 'lat-docs')
+    .option('--dense', 'also ship dense embeddings for in-browser semantic search (needs the optional @huggingface/transformers dep)')
     .action(async (opts) => {
     const ctx = resolveContext(program.opts());
     const { buildCommand } = await import('./build.js');
-    handleResult(await buildCommand(ctx, { out: opts.out }));
+    handleResult(await buildCommand(ctx, { out: opts.out, dense: opts.dense }));
 });
 program
     .command('gen')

@@ -8,4 +8,5 @@ import type { CmdContext, CmdResult } from '../context.js';
  */
 export declare function buildCommand(ctx: CmdContext, opts: {
     out: string;
+    dense?: boolean;
 }): Promise<CmdResult>;

@@ -20,6 +20,7 @@ import {
   buildSidebar,
   buildSectionContent,
   renderPage,
+  STATIC_EMBED_MODEL,
   type SectionUrl,
 } from '../render/site.js';
 
@@ -48,7 +49,7 @@ function fullEndLine(section: Section): number {
  */
 export async function buildCommand(
   ctx: CmdContext,
-  opts: { out: string },
+  opts: { out: string; dense?: boolean },
 ): Promise<CmdResult> {
   const { latDir, projectRoot } = ctx;
   const outDir = isAbsolute(opts.out) ? opts.out : join(projectRoot, opts.out);
@@ -143,6 +144,7 @@ export async function buildCommand(
     file: string;
     firstParagraph: string;
     text: string;
+    vec?: number[];
   }[] = [];
 
   for (const section of flat) {
@@ -195,6 +197,28 @@ export async function buildCommand(
     });
   }
 
+  // Optional dense vectors: embed each section with the same small model the
+  // browser uses for the query (see [[cli#build#Client search]]), so cosine is
+  // meaningful across the two. Lazy + optional so the default build needs no
+  // native deps or model download.
+  let denseNote = '';
+  if (opts.dense) {
+    const embedded = await embedDocs(
+      searchIndex.map((e) => `${e.heading} ${e.text}`),
+    );
+    if (embedded) {
+      embedded.forEach((vec, i) => (searchIndex[i].vec = vec));
+      denseNote = ctx.styler.dim(
+        ` Dense vectors shipped (${embedded[0]?.length ?? 0}-dim, ${STATIC_EMBED_MODEL}); ` +
+          'the page lazy-loads the same model (~23 MB) to embed queries.',
+      );
+    } else {
+      denseNote = ctx.styler.yellow(
+        ' --dense skipped: install the optional @huggingface/transformers dependency.',
+      );
+    }
+  }
+
   // Index page + search index.
   await writeFile(
     join(outDir, 'index.html'),
@@ -226,9 +250,38 @@ export async function buildCommand(
       ` to ${s.cyan(rel)}\n` +
       s.dim(
         `Open ${rel}/index.html, or serve the directory (e.g. \`npx serve ${rel}\`). ` +
-          'Search is client-side BM25 (lexical).',
-      ),
+          `Search is client-side ${opts.dense ? 'hybrid (BM25 + dense)' : 'BM25 (lexical)'}.`,
+      ) +
+      denseNote,
   };
+}
+
+/**
+ * Embed each text with the static-site model ([[src/render/site.ts#STATIC_EMBED_MODEL]])
+ * via the optional `@huggingface/transformers` dependency — the SAME model the
+ * browser loads for the query, so the vectors are comparable. Returns one
+ * L2-normalized vector per input, or `null` if the optional dep isn't installed.
+ */
+async function embedDocs(texts: string[]): Promise<number[][] | null> {
+  let pipeline: unknown;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ({ pipeline } = (await import('@huggingface/transformers')) as any);
+  } catch {
+    return null;
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const extractor: any = await (pipeline as any)(
+    'feature-extraction',
+    STATIC_EMBED_MODEL,
+    { dtype: 'q8' },
+  );
+  const out: number[][] = [];
+  for (const text of texts) {
+    const t = await extractor(text, { pooling: 'mean', normalize: true });
+    out.push(Array.from(t.data as Float32Array));
+  }
+  return out;
 }
 
 /** Get-or-create an inner Map (keeps the graph-aggregation loop terse). */

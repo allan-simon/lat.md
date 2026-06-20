@@ -4,7 +4,7 @@ import { join, isAbsolute, relative } from 'node:path';
 import { loadAllSections, flattenSections, listLatticeFiles, buildFileIndex, resolveRef, extractRefs, } from '../lattice.js';
 import { scanCodeRefs } from '../code-refs.js';
 import { isSourceTarget } from '../render/html.js';
-import { buildResolver, buildSidebar, buildSectionContent, renderPage, } from '../render/site.js';
+import { buildResolver, buildSidebar, buildSectionContent, renderPage, STATIC_EMBED_MODEL, } from '../render/site.js';
 /** A filesystem-safe slug for a section id (collisions disambiguated by caller). */
 function slugify(id) {
     return (id
@@ -145,6 +145,22 @@ export async function buildCommand(ctx, opts) {
             text: content,
         });
     }
+    // Optional dense vectors: embed each section with the same small model the
+    // browser uses for the query (see [[cli#build#Client search]]), so cosine is
+    // meaningful across the two. Lazy + optional so the default build needs no
+    // native deps or model download.
+    let denseNote = '';
+    if (opts.dense) {
+        const embedded = await embedDocs(searchIndex.map((e) => `${e.heading} ${e.text}`));
+        if (embedded) {
+            embedded.forEach((vec, i) => (searchIndex[i].vec = vec));
+            denseNote = ctx.styler.dim(` Dense vectors shipped (${embedded[0]?.length ?? 0}-dim, ${STATIC_EMBED_MODEL}); ` +
+                'the page lazy-loads the same model (~23 MB) to embed queries.');
+        }
+        else {
+            denseNote = ctx.styler.yellow(' --dense skipped: install the optional @huggingface/transformers dependency.');
+        }
+    }
     // Index page + search index.
     await writeFile(join(outDir, 'index.html'), renderPage({
         title: 'lat.md',
@@ -165,8 +181,33 @@ export async function buildCommand(ctx, opts) {
         output: s.green(`Built ${flat.length} pages`) +
             ` to ${s.cyan(rel)}\n` +
             s.dim(`Open ${rel}/index.html, or serve the directory (e.g. \`npx serve ${rel}\`). ` +
-                'Search is client-side BM25 (lexical).'),
+                `Search is client-side ${opts.dense ? 'hybrid (BM25 + dense)' : 'BM25 (lexical)'}.`) +
+            denseNote,
     };
+}
+/**
+ * Embed each text with the static-site model ([[src/render/site.ts#STATIC_EMBED_MODEL]])
+ * via the optional `@huggingface/transformers` dependency — the SAME model the
+ * browser loads for the query, so the vectors are comparable. Returns one
+ * L2-normalized vector per input, or `null` if the optional dep isn't installed.
+ */
+async function embedDocs(texts) {
+    let pipeline;
+    try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ({ pipeline } = (await import('@huggingface/transformers')));
+    }
+    catch {
+        return null;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const extractor = await pipeline('feature-extraction', STATIC_EMBED_MODEL, { dtype: 'q8' });
+    const out = [];
+    for (const text of texts) {
+        const t = await extractor(text, { pooling: 'mean', normalize: true });
+        out.push(Array.from(t.data));
+    }
+    return out;
 }
 /** Get-or-create an inner Map (keeps the graph-aggregation loop terse). */
 function setGet(m, k) {

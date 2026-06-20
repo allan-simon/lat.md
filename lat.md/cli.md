@@ -335,7 +335,7 @@ Implementation: [[src/cli/serve.ts]], [[src/render/html.ts]], [[src/render/site.
 
 Build a static HTML docs site from the graph — the same view as [[cli#serve]], but as plain files deployable to GitHub Pages with no server or runtime.
 
-Usage: `lat build [--out lat-docs]`
+Usage: `lat build [--out lat-docs] [--dense]`
 
 [[src/cli/build.ts#buildCommand]] renders every section to a flat `<slug>.html` file (plus `index.html`), using the shared page builders in [[src/render/site.ts]] so output matches `serve` exactly. Flat filenames (not nested paths or query routes) keep every link relative, so the site works under any base path — including a project's GitHub Pages subpath. Interactive widgets in `lat.md/_widgets/` are copied alongside.
 
@@ -343,11 +343,13 @@ To stay fast on large graphs, the wiki-link graph and code back-refs are aggrega
 
 ### Client search
 
-The static site has no server, so search is **client-side and lexical**: `lat build` ships a `search-index.json` (one entry per section: heading, first paragraph, body text, URL), and the page runs BM25 over it via [[src/render/site.ts#bm25Search]].
+The static site has no server, so search runs **in the browser**, scored by [[src/render/site.ts#staticSearch]].
 
-That scorer is a pure function injected into the page through `.toString()`, so the shipped client and the unit tests run identical code.
+`lat build` ships a `search-index.json` (one entry per section: heading, first paragraph, body text, URL), and `staticSearch` is a pure function injected into the page through `.toString()`, so the shipped client and the unit tests run identical code.
 
-This is BM25 only. A dense/semantic upgrade — shipping the document embeddings and embedding the query in-browser with Qwen via WASM, gated by the [[cli#search#Model Fingerprint]] (only possible when the index was built with the local model) — is a planned enhancement, not yet implemented.
+By default this is **BM25 only** (lexical, zero extra weight). With `--dense`, `lat build` also embeds each section at build time with a small model ([[src/render/site.ts#STATIC_EMBED_MODEL]], `Xenova/all-MiniLM-L6-v2`, 384-dim) via the optional `@huggingface/transformers` dependency, and ships the L2-normalized vectors in the index. The page then lazy-loads the **same** model (~23 MB, from a CDN) to embed the query in-browser and `staticSearch` fuses cosine similarity with BM25 (0.75 dense / 0.25 bm25, matching [[src/search/fusion.ts]]).
+
+Using the same model on both ends — Node at build time and the browser at query time, both from the one npm package — guarantees the query and document vectors are comparable. It's a **progressive enhancement**: BM25 works immediately and the page stays functional (lexically) if the model can't load, e.g. offline. This is intentionally a different, browser-optimized model from the server-side [[cli#search#Local Mode]] (Qwen) — the static path optimizes for download size, not maximum quality.
 
 Implementation: [[src/cli/build.ts]], [[src/render/site.ts]]
 

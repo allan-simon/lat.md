@@ -23,7 +23,11 @@ export type SearchDoc = {
     heading: string;
     firstParagraph: string;
     text: string;
+    /** L2-normalized dense embedding, present only when built with `--dense`. */
+    vec?: number[];
 };
+/** Embedding model used for the static dense index (same in Node build + browser query). */
+export declare const STATIC_EMBED_MODEL = "Xenova/all-MiniLM-L6-v2";
 /** A ranked search hit returned by [[src/render/site.ts#bm25Search]]. */
 export type SearchHit = {
     url: string;
@@ -32,13 +36,19 @@ export type SearchHit = {
     score: number;
 };
 /**
- * Pure BM25 search over the static index — the lexical scorer shipped to the
- * browser for `lat build`. Tokenizes on `[a-z0-9]+`, scores heading + body with
- * standard BM25 (k1=1.5, b=0.75), returns the top 8 hits. This same function is
- * injected into the static page via `.toString()` (so the shipped client and the
- * unit tests run identical code) and called directly in tests. The dense upgrade
- * (Qwen via WASM) is a future enhancement; see [[cli#build#Client search]].
+ * Pure static search — the scorer shipped to the browser for `lat build`. Always
+ * runs BM25 (k1=1.5, b=0.75) over heading + body. When `queryVec` is provided
+ * (the page embedded the query in-browser) and docs carry dense `vec`s, it also
+ * computes cosine similarity (vectors are L2-normalized, so dot product) and
+ * fuses the two min-max-normalized sides as `0.75*dense + 0.25*bm25` — the same
+ * weighting as the server-side [[src/search/fusion.ts]]. Returns the top 8 hits.
+ *
+ * Self-contained (no external references) so it can be injected into the static
+ * page verbatim via `.toString()`; the shipped client and the unit tests run
+ * identical code. See [[cli#build#Client search]].
  */
+export declare function staticSearch(query: string, docs: SearchDoc[], queryVec: number[] | null): SearchHit[];
+/** BM25-only convenience wrapper over [[src/render/site.ts#staticSearch]]. */
 export declare function bm25Search(query: string, docs: SearchDoc[]): SearchHit[];
 export type SearchMode = {
     mode: 'server';

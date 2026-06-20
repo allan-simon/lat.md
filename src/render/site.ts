@@ -135,7 +135,12 @@ export type SearchDoc = {
   heading: string;
   firstParagraph: string;
   text: string;
+  /** L2-normalized dense embedding, present only when built with `--dense`. */
+  vec?: number[];
 };
+
+/** Embedding model used for the static dense index (same in Node build + browser query). */
+export const STATIC_EMBED_MODEL = 'Xenova/all-MiniLM-L6-v2';
 
 /** A ranked search hit returned by [[src/render/site.ts#bm25Search]]. */
 export type SearchHit = {
@@ -146,17 +151,27 @@ export type SearchHit = {
 };
 
 /**
- * Pure BM25 search over the static index — the lexical scorer shipped to the
- * browser for `lat build`. Tokenizes on `[a-z0-9]+`, scores heading + body with
- * standard BM25 (k1=1.5, b=0.75), returns the top 8 hits. This same function is
- * injected into the static page via `.toString()` (so the shipped client and the
- * unit tests run identical code) and called directly in tests. The dense upgrade
- * (Qwen via WASM) is a future enhancement; see [[cli#build#Client search]].
+ * Pure static search — the scorer shipped to the browser for `lat build`. Always
+ * runs BM25 (k1=1.5, b=0.75) over heading + body. When `queryVec` is provided
+ * (the page embedded the query in-browser) and docs carry dense `vec`s, it also
+ * computes cosine similarity (vectors are L2-normalized, so dot product) and
+ * fuses the two min-max-normalized sides as `0.75*dense + 0.25*bm25` — the same
+ * weighting as the server-side [[src/search/fusion.ts]]. Returns the top 8 hits.
+ *
+ * Self-contained (no external references) so it can be injected into the static
+ * page verbatim via `.toString()`; the shipped client and the unit tests run
+ * identical code. See [[cli#build#Client search]].
  */
-export function bm25Search(query: string, docs: SearchDoc[]): SearchHit[] {
+export function staticSearch(
+  query: string,
+  docs: SearchDoc[],
+  queryVec: number[] | null,
+): SearchHit[] {
   const tok = (s: string): string[] =>
     s.toLowerCase().match(/[a-z0-9]+/g) || [];
   const N = docs.length;
+  if (!N) return [];
+
   const prepared = docs.map((d) => {
     const terms = tok(`${d.heading} ${d.text}`);
     const tf: Record<string, number> = {};
@@ -166,24 +181,59 @@ export function bm25Search(query: string, docs: SearchDoc[]): SearchHit[] {
   const df: Record<string, number> = {};
   for (const p of prepared)
     for (const t of Object.keys(p.tf)) df[t] = (df[t] || 0) + 1;
-  const avgdl = prepared.reduce((a, x) => a + x.len, 0) / (N || 1);
+  const avgdl = prepared.reduce((a, x) => a + x.len, 0) / N;
   const qt = tok(query);
   const k1 = 1.5;
   const b = 0.75;
-  const scored = prepared
-    .map((x) => {
-      let s = 0;
-      for (const t of qt) {
-        const f = x.tf[t];
-        if (!f) continue;
-        const idf = Math.log(1 + (N - df[t] + 0.5) / (df[t] + 0.5));
-        s += (idf * (f * (k1 + 1))) / (f + k1 * (1 - b + (b * x.len) / avgdl));
-      }
-      return { d: x.d, score: s };
-    })
-    .filter((x) => x.score > 0);
-  scored.sort((a, b) => b.score - a.score);
-  return scored.slice(0, 8).map((x) => ({
+  const bm25 = prepared.map((x) => {
+    let s = 0;
+    for (const t of qt) {
+      const f = x.tf[t];
+      if (!f) continue;
+      const idf = Math.log(1 + (N - df[t] + 0.5) / (df[t] + 0.5));
+      s += (idf * (f * (k1 + 1))) / (f + k1 * (1 - b + (b * x.len) / avgdl));
+    }
+    return s;
+  });
+
+  const useDense = !!queryVec && !!prepared[0].d.vec;
+  const dense = useDense
+    ? prepared.map((x) => {
+        const v = x.d.vec;
+        if (!v) return 0;
+        let s = 0;
+        const n = Math.min(v.length, queryVec!.length);
+        for (let i = 0; i < n; i++) s += v[i] * queryVec![i];
+        return s;
+      })
+    : null;
+
+  const norm = (arr: number[]): number[] => {
+    let mn = Infinity;
+    let mx = -Infinity;
+    for (const v of arr) {
+      if (v < mn) mn = v;
+      if (v > mx) mx = v;
+    }
+    const span = mx - mn;
+    return arr.map((v) => (span === 0 ? (mx > 0 ? 1 : 0) : (v - mn) / span));
+  };
+
+  const bn = norm(bm25);
+  const DENSE_W = 0.75;
+  const fused = dense
+    ? norm(dense).map((d, i) => DENSE_W * d + (1 - DENSE_W) * bn[i])
+    : bn;
+
+  const ranked = prepared
+    .map((x, i) => ({
+      d: x.d,
+      score: fused[i],
+      keep: dense ? true : bm25[i] > 0,
+    }))
+    .filter((x) => x.keep && x.score > 0);
+  ranked.sort((a, b) => b.score - a.score);
+  return ranked.slice(0, 8).map((x) => ({
     url: x.d.url,
     heading: x.d.heading,
     firstParagraph: x.d.firstParagraph,
@@ -191,22 +241,47 @@ export function bm25Search(query: string, docs: SearchDoc[]): SearchHit[] {
   }));
 }
 
+/** BM25-only convenience wrapper over [[src/render/site.ts#staticSearch]]. */
+export function bm25Search(query: string, docs: SearchDoc[]): SearchHit[] {
+  return staticSearch(query, docs, null);
+}
+
 /**
- * Client-side search over a shipped JSON index (lat build). No server, no
- * embeddings — lexical BM25 only, via [[src/render/site.ts#bm25Search]] injected
- * verbatim. `__INDEX_HREF__` is replaced at build time.
+ * Client-side search over a shipped JSON index (lat build). Lexical BM25 runs
+ * immediately; if the index carries dense `vec`s, the query embedder
+ * ([[src/render/site.ts#STATIC_EMBED_MODEL]], ~23 MB) is lazy-loaded from a CDN
+ * and search upgrades to hybrid once it's ready — a progressive enhancement, so
+ * the page works (lexically) even offline. `__INDEX_HREF__` / `__EMBED_MODEL__`
+ * are substituted at build time.
  */
 const SEARCH_STATIC = `${RENDER_RESULTS}
-var bm25Search = ${bm25Search.toString()};
+var staticSearch = ${staticSearch.toString()};
 (function(){
-  var q = document.getElementById('q'), results = document.getElementById('results'), docs = null, t;
-  fetch('__INDEX_HREF__').then(function(r){ return r.json(); }).then(function(d){ docs = d; });
+  var q = document.getElementById('q'), results = document.getElementById('results');
+  var docs = null, extractor = null, t;
+  fetch('__INDEX_HREF__').then(function(r){ return r.json(); }).then(function(d){
+    docs = d;
+    if (d.length && d[0].vec) loadModel();
+  });
+  function loadModel(){
+    import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@4').then(function(m){
+      return m.pipeline('feature-extraction', '__EMBED_MODEL__', { dtype: 'q8' });
+    }).then(function(p){ extractor = p; }).catch(function(){ /* stay lexical */ });
+  }
+  async function run(v){
+    var qv = null;
+    if (extractor) {
+      try { var o = await extractor(v, { pooling: 'mean', normalize: true }); qv = Array.from(o.data); }
+      catch (e) { qv = null; }
+    }
+    if (docs) renderResults(staticSearch(v, docs, qv), results);
+  }
   if (!q) return;
   q.addEventListener('input', function(){
     clearTimeout(t);
     var v = q.value.trim();
     if (!v || !docs) { results.innerHTML = ''; return; }
-    t = setTimeout(function(){ renderResults(bm25Search(v, docs), results); }, 120);
+    t = setTimeout(function(){ run(v); }, 150);
   });
 })();`;
 
@@ -216,7 +291,10 @@ export type SearchMode =
 
 function searchScript(search: SearchMode): string {
   if (search.mode === 'server') return SEARCH_SERVER;
-  return SEARCH_STATIC.replace('__INDEX_HREF__', search.indexHref);
+  return SEARCH_STATIC.replace('__INDEX_HREF__', search.indexHref).replace(
+    '__EMBED_MODEL__',
+    STATIC_EMBED_MODEL,
+  );
 }
 
 // ── Page assembly ───────────────────────────────────────────────────
