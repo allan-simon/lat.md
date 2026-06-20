@@ -2,6 +2,7 @@ import { unified } from 'unified';
 import remarkParse from 'remark-parse';
 import remarkFrontmatter from 'remark-frontmatter';
 import remarkGfm from 'remark-gfm';
+import remarkDirective from 'remark-directive';
 import remarkRehype from 'remark-rehype';
 import rehypeRaw from 'rehype-raw';
 import rehypeStringify from 'rehype-stringify';
@@ -11,6 +12,88 @@ import {
   wikiLinkFromMarkdown,
 } from '../extensions/wiki-link/index.js';
 import { SOURCE_EXTENSIONS } from '../source-parser.js';
+
+/**
+ * Recognized MyST admonition kinds → their default title. Container directives
+ * with these names render as styled `<aside>` callouts; see [[cli#serve#Rendering]].
+ */
+const ADMONITIONS: Record<string, string> = {
+  note: 'Note',
+  tip: 'Tip',
+  info: 'Info',
+  important: 'Important',
+  warning: 'Warning',
+  caution: 'Caution',
+  danger: 'Danger',
+};
+
+/**
+ * Normalize MyST brace directives (`:::{note}` / `:::{note} Title`) to the bare
+ * remark-directive form (`:::note` / `:::note[Title]`) so authors can use either
+ * syntax. Only rewrites full-line opening fences; leaves other content alone.
+ */
+function normalizeMystDirectives(md: string): string {
+  return md.replace(
+    /^(\s*):::\{([a-zA-Z][\w-]*)\}[ \t]*(.*)$/gm,
+    (_m, indent: string, name: string, title: string) =>
+      title.trim()
+        ? `${indent}:::${name}[${title.trim()}]`
+        : `${indent}:::${name}`,
+  );
+}
+
+/** Concatenate the text content of an mdast node's phrasing children. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function textOf(node: any): string {
+  if (node.type === 'text') return node.value as string;
+  if (!node.children) return '';
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return node.children.map((c: any) => textOf(c)).join('');
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function walk(node: any, fn: (n: any) => void): void {
+  fn(node);
+  if (node.children) for (const child of node.children) walk(child, fn);
+}
+
+/**
+ * remark plugin: turn admonition container directives (`:::note … :::`) into
+ * styled `<aside class="admonition admonition-<kind>">` with a title, and any
+ * other container directive into a plain `<div>` so its content still renders.
+ */
+function remarkAdmonitions() {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (tree: any) => {
+    walk(tree, (node) => {
+      if (node.type !== 'containerDirective') return;
+      const kind = node.name as string;
+      node.data = node.data || {};
+      if (!ADMONITIONS[kind]) {
+        node.data.hName = 'div';
+        return;
+      }
+      let title = ADMONITIONS[kind];
+      const first = node.children?.[0];
+      if (first?.data?.directiveLabel) {
+        title = textOf(first) || title;
+        node.children.shift();
+      }
+      node.data.hName = 'aside';
+      node.data.hProperties = {
+        className: ['admonition', `admonition-${kind}`],
+      };
+      node.children.unshift({
+        type: 'paragraph',
+        data: {
+          hName: 'p',
+          hProperties: { className: ['admonition-title'] },
+        },
+        children: [{ type: 'text', value: title }],
+      });
+    });
+  };
+}
 
 /**
  * How a [[wiki link]] target resolves for rendering. A `section` link points at
@@ -52,6 +135,8 @@ export async function renderMarkdown(
     .use(remarkParse)
     .use(remarkFrontmatter)
     .use(remarkGfm)
+    .use(remarkDirective)
+    .use(remarkAdmonitions)
     .data('micromarkExtensions', [wikiLinkSyntax()])
     .data('fromMarkdownExtensions', [wikiLinkFromMarkdown()])
     .use(remarkRehype, {
@@ -125,7 +210,7 @@ export async function renderMarkdown(
     })
     .use(rehypeRaw)
     .use(rehypeStringify, { allowDangerousHtml: true })
-    .process(markdown);
+    .process(normalizeMystDirectives(markdown));
 
   return String(file);
 }

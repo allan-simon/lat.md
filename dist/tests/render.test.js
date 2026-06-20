@@ -42,6 +42,30 @@ describe('renderMarkdown', () => {
         expect(html).toMatch(/<iframe[^>]*src="_widgets\/demo\.html"/);
     });
 });
+// @lat: [[tests/render#MyST admonitions]]
+describe('renderMarkdown — MyST admonitions', () => {
+    it('renders a bare :::note directive as a styled aside with a default title', async () => {
+        const html = await renderMarkdown(':::note\nBody text.\n:::', resolve);
+        expect(html).toContain('<aside class="admonition admonition-note">');
+        expect(html).toContain('class="admonition-title">Note</p>');
+        expect(html).toContain('Body text.');
+    });
+    it('renders the MyST brace form :::{warning} with a custom title', async () => {
+        const html = await renderMarkdown(':::{warning} Heads up\nBe careful.\n:::', resolve);
+        expect(html).toContain('<aside class="admonition admonition-warning">');
+        expect(html).toContain('class="admonition-title">Heads up</p>');
+    });
+    it('supports a remark-directive label :::tip[Pro tip]', async () => {
+        const html = await renderMarkdown(':::tip[Pro tip]\nDo this.\n:::', resolve);
+        expect(html).toContain('class="admonition-title">Pro tip</p>');
+    });
+    it('falls back to a plain div for an unknown directive name', async () => {
+        const html = await renderMarkdown(':::sidebar\nstuff\n:::', resolve);
+        expect(html).toContain('<div');
+        expect(html).toContain('stuff');
+        expect(html).not.toContain('admonition');
+    });
+});
 // @lat: [[tests/render#escapeHtml]]
 describe('escapeHtml', () => {
     it('escapes the HTML-significant characters', () => {

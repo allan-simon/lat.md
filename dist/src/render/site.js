@@ -63,6 +63,14 @@ a { color:var(--accent); text-decoration:none; } a:hover { text-decoration:under
 .backlinks .desc { color:var(--dim); }
 .coderef { font-family:ui-monospace,monospace; font-size:.85rem; }
 .coderef pre { margin:.3rem 0; }
+.admonition { margin:1rem 0; padding:.6rem .9rem; border-left:4px solid var(--accent); border-radius:6px; background:#1b1f29; }
+.admonition-title { margin:0 0 .3rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; font-size:.8rem; }
+.admonition > :last-child { margin-bottom:0; }
+.admonition-note { border-left-color:#7aa2f7; } .admonition-note .admonition-title { color:#7aa2f7; }
+.admonition-tip, .admonition-info { border-left-color:#9ece6a; } .admonition-tip .admonition-title, .admonition-info .admonition-title { color:#9ece6a; }
+.admonition-important { border-left-color:#bb9af7; } .admonition-important .admonition-title { color:#bb9af7; }
+.admonition-warning, .admonition-caution { border-left-color:#e0af68; } .admonition-warning .admonition-title, .admonition-caution .admonition-title { color:#e0af68; }
+.admonition-danger { border-left-color:#f7768e; } .admonition-danger .admonition-title { color:#f7768e; }
 `;
 // ── Search client scripts (server vs static) ────────────────────────
 /** Shared renderer for a result list; both modes produce `{url,heading,score,firstParagraph}`. */

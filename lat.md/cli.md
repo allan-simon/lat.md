@@ -321,6 +321,8 @@ Markdown is rendered to HTML by [[src/render/html.ts#renderMarkdown]], which reu
 
 `[[wiki links]]` are resolved through the lattice: section targets become `/section?id=…` anchors, source-symbol targets (`[[src/foo.ts#bar]]`) render as inert `<code>` (the server doesn't serve source), and unresolved targets are flagged with a `broken` class so authors notice. Fenced ` ```mermaid ` blocks become `<pre class="mermaid">` for client-side rendering via the mermaid ESM bundle (loaded from a CDN); other fences keep a `language-*` class. Raw HTML — notably widget `<iframe>`s — passes through via `rehype-raw`.
 
+**MyST admonitions** (via `remark-directive`) render as styled callouts: a container directive named `note`, `tip`, `info`, `important`, `warning`, `caution`, or `danger` becomes an `<aside class="admonition admonition-<kind>">` with a title. Both the MyST brace form `:::{note} Title` and the remark-directive forms `:::note` / `:::note[Title]` are accepted (the brace form is normalized to the bare form before parsing). Unknown directive names fall back to a plain `<div>` so their content still renders.
+
 ### Widgets
 
 Interactive mini-apps live under `lat.md/_widgets/` and are embedded by section pages via `<iframe src="_widgets/…">` (see the agent template's "Rich & interactive content" guidance).

@@ -20,6 +20,12 @@ Verify that:
 - other fences keep a `language-*` class;
 - raw widget `<iframe>` HTML passes through.
 
+## MyST admonitions
+
+Unit tests for the admonition rendering in [[src/render/html.ts#renderMarkdown]] (via remark-directive).
+
+Verify a bare `:::note` directive becomes a styled `<aside class="admonition admonition-note">` with a default "Note" title; the MyST brace form `:::{warning} Heads up` and the remark-directive label form `:::tip[Pro tip]` both produce custom titles; and an unknown directive name falls back to a plain `<div>` so its content still renders.
+
 ## escapeHtml
 
 Unit test for [[src/render/html.ts#escapeHtml]]. Verify the HTML-significant characters `&`, `<`, `>`, and `"` are escaped so untrusted strings are safe to interpolate into markup.
