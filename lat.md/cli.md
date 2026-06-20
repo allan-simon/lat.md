@@ -341,6 +341,12 @@ Usage: `lat build [--out lat-docs] [--dense]`
 
 To stay fast on large graphs, the wiki-link graph and code back-refs are aggregated **once** up front (rather than calling [[src/cli/section.ts#getSection]] per section, which would re-scan the repo each time).
 
+### Deployment
+
+The output is plain static files, so any static host works.
+
+This repo ships a GitHub Pages workflow at `.github/workflows/pages.yml` that runs `lat build --dense` and publishes the site on push. Because every link is relative (flat filenames, no leading `/`), the site works unchanged under the `https://<user>.github.io/<repo>/` base path — no base-path config needed. Mermaid and the dense-search model load from a CDN at runtime, so they work on Pages too. One-time setup: enable Pages with **Source = GitHub Actions** in the repo settings.
+
 ### Client search
 
 The static site has no server, so search runs **in the browser**, scored by [[src/render/site.ts#staticSearch]].

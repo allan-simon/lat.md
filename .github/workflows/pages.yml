@@ -1,0 +1,59 @@
+name: Docs (GitHub Pages)
+
+# Builds the lat.md graph into a static site (lat build) and deploys it to
+# GitHub Pages. The site uses flat, relative links so it works under the
+# project's /<repo>/ Pages base path with no extra config.
+#
+# One-time setup: repo Settings → Pages → Source = "GitHub Actions".
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'lat.md/**'
+      - 'src/**'
+      - 'templates/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow one concurrent deployment; don't cancel an in-progress one mid-publish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      # --dense ships in-browser semantic search (downloads the embedding model
+      # at build time via the optional @huggingface/transformers dep). Drop
+      # --dense for a lighter BM25-only site.
+      - name: Build docs site
+        run: node dist/src/cli/index.js build --dense --out _site
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
