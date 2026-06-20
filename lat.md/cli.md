@@ -298,6 +298,37 @@ Each MCP tool calls the same command function as the CLI (e.g. `locateCommand`, 
 
 Implementation: [[src/mcp/server.ts]]
 
+## serve
+
+Serve the lat.md graph as a local, interactive HTML docs site — a human-friendly view over the same knowledge graph agents query. Zero front-end build: vanilla HTML/JS rendered server-side, no bundler.
+
+Usage: `lat serve [--port 4321]`
+
+Started by [[src/cli/serve.ts#serveCommand]], a plain `node:http` server. It reuses the same command cores as the CLI/MCP rather than reimplementing logic: section pages call [[src/cli/section.ts#getSection]] (content + outgoing refs + incoming backlinks + code back-refs), and `/api/search` calls [[src/cli/search.ts#runSearch]] — so search honors the local-first default ([[cli#search#Provider Detection]]). Sections are reloaded per request so edits show on refresh (no watcher).
+
+### Routes
+
+The server exposes a small fixed set of routes; everything else 404s.
+
+- `GET /` — index: a sidebar listing every section grouped by file, plus the live search box.
+- `GET /section?id=<section-id>` — a rendered section page (content, "Referenced by", "References", "Referenced by code").
+- `GET /api/search?q=<query>&limit=<n>` — JSON search results `{matches: [{id, heading, file, firstParagraph, reason, score}]}`.
+- `GET /_widgets/<path>` — static [[cli#serve#Widgets]] files.
+
+### Rendering
+
+Markdown is rendered to HTML by [[src/render/html.ts#renderMarkdown]], which reuses the project's remark stack (wiki-link syntax + frontmatter) so the rendered output matches what the graph actually parses.
+
+`[[wiki links]]` are resolved through the lattice: section targets become `/section?id=…` anchors, source-symbol targets (`[[src/foo.ts#bar]]`) render as inert `<code>` (the server doesn't serve source), and unresolved targets are flagged with a `broken` class so authors notice. Fenced ` ```mermaid ` blocks become `<pre class="mermaid">` for client-side rendering via the mermaid ESM bundle (loaded from a CDN); other fences keep a `language-*` class. Raw HTML — notably widget `<iframe>`s — passes through via `rehype-raw`.
+
+### Widgets
+
+Interactive mini-apps live under `lat.md/_widgets/` and are embedded by section pages via `<iframe src="_widgets/…">` (see the agent template's "Rich & interactive content" guidance).
+
+[[src/cli/serve.ts#serveWidget]] serves them with a content-type by extension and guards against path traversal (the resolved path must stay within the widgets dir). This keeps interactive JS in self-contained, testable files instead of inline `<script>` blobs in the prose.
+
+Implementation: [[src/cli/serve.ts]], [[src/render/html.ts]]
+
 ## search
 
 Semantic search across `lat.md` sections using vector embeddings.

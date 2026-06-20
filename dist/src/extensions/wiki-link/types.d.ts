@@ -1,13 +1,16 @@
-import type { Literal } from 'mdast';
+import type { Literal, Data } from 'mdast';
+/** Custom mdast `data` payload carried by a wiki-link node. Extends the base
+ * unist `Data` so it stays assignable to the inherited `Node['data']`. */
+export interface WikiLinkData extends Data {
+    alias: string | null;
+}
 /**
  * mdast node for a wiki-style link like [[target]] or [[target|alias]].
  */
 export interface WikiLink extends Literal {
     type: 'wikiLink';
     value: string;
-    data: {
-        alias: string | null;
-    };
+    data: WikiLinkData;
 }
 declare module 'mdast' {
     interface RootContentMap {

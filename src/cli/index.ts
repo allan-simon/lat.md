@@ -198,6 +198,16 @@ program
   );
 
 program
+  .command('serve')
+  .description('Serve the lat.md graph as an interactive HTML docs site')
+  .option('--port <n>', 'port to listen on', '4321')
+  .action(async (opts: { port: string }) => {
+    const ctx = resolveContext(program.opts());
+    const { serveCommand } = await import('./serve.js');
+    await serveCommand(ctx, { port: parseInt(opts.port) || 4321 });
+  });
+
+program
   .command('gen')
   .description(
     'Generate a file to stdout (agents.md, claude.md, cursor-rules.md)',

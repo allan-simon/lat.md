@@ -29,3 +29,4 @@ Shared patterns for writing and organizing tests in this project.
 - [[section]] — getSection core function and formatSectionOutput formatter
 - [[hook]] — Stop hook conditional blocking and diff analysis
 - [[ts-fallback]] — Pure-TypeScript code-ref scanner fallback without ripgrep
+- [[render]] — Server-side markdown→HTML rendering for the docs server
