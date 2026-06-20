@@ -39,6 +39,36 @@ If `lat search` fails because no API key is configured, explain to the user that
 - **Source code links**: Wiki links in `lat.md/` files can reference functions, classes, constants, and methods in TypeScript/JavaScript/Python/Rust/Go/C files. Use the full path: `[[src/config.ts#getConfigDir]]`, `[[src/server.ts#App#listen]]` (class method), `[[lib/utils.py#parse_args]]`, `[[src/lib.rs#Greeter#greet]]` (Rust impl method), `[[src/app.go#Greeter#Greet]]` (Go method), `[[src/app.h#Greeter]]` (C struct). `lat check` validates these exist.
 - **Code refs**: `// @lat: [[section-id]]` (JS/TS/Rust/Go/C) or `# @lat: [[section-id]]` (Python) — ties source code to concepts
 
+# Rich & interactive content
+
+`lat.md/` files are markdown, but a picture often explains a design better than a paragraph. Reach for richer content when it genuinely clarifies — and always keep the prose: the leading paragraph is what semantic search and RAG index, so a diagram or widget **complements** the text, never replaces it.
+
+- **Diagrams** — use [Mermaid](https://mermaid.js.org/) fenced blocks for architecture, data flow, sequence, and state machines. They render in `lat serve` / `lat build` (and on GitHub):
+
+  ````markdown
+  ```mermaid
+  graph LR; CLI --> lattice; lattice --> search; search --> fusion
+  ```
+  ````
+
+- **Structured callouts** — use [MyST](https://mystmd.org/) directives for admonitions, notes, and other typed blocks. They stay readable as plain markdown and carry a semantic type the renderer can style:
+
+  ```markdown
+  :::{note}
+  Embeddings default to the in-process local model; a remote key is opt-in.
+  :::
+  ```
+
+- **Interactive mini-apps** — when a static diagram isn't enough (you want sliders, buttons, a live demo of an algorithm or state explorer), **don't hesitate** to build a small interactive HTML/JS widget. Keep it as a **self-contained file** under `lat.md/_widgets/` and embed it with an iframe — never paste a `<script>` blob inline in the prose (it pollutes diffs and can't be validated):
+
+  ```markdown
+  Adjust the dense/BM25 weight and watch the ranking change:
+
+  <iframe src="_widgets/hybrid-weight.html" width="100%" height="320" loading="lazy"></iframe>
+  ```
+
+  The widget file is plain HTML/JS (no build step). `lat serve` / `lat build` serve it in a sandboxed iframe. Prefer one focused widget per concept, and write the surrounding paragraph so the section still makes sense without it.
+
 # Test specs
 
 Key tests can be described as sections in `lat.md/` files (e.g. `tests.md`). Add frontmatter to require that every leaf section is referenced by a `// @lat:` or `# @lat:` comment in test code:
