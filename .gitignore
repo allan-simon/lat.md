@@ -16,3 +16,6 @@ lat-docs/
 
 # eval scaffolding (regenerable)
 eval/corpus-dump.json
+
+# compiled test fixtures (never published; only dist/src ships)
+dist/tests/

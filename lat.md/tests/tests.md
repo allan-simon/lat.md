@@ -32,3 +32,4 @@ Shared patterns for writing and organizing tests in this project.
 - [[render]] — Server-side markdown→HTML rendering for the docs server
 - [[build]] — Static site generation and client-side BM25 search
 - [[graph]] — Section-graph data for the interactive graph view
+- [[serve]] — HTTP routes of the lat serve docs server
