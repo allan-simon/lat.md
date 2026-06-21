@@ -52,13 +52,16 @@ describe('serve', () => {
   });
 
   // @lat: [[tests/serve#Index page]]
-  it('serves the index with the section tree and graph link', async () => {
+  it('serves the index with overview content, section tree, and graph link', async () => {
     const res = await fetch(base + '/');
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain('<title>lat.md</title>');
     expect(html).toContain('/section?id=');
     expect(html).toContain('href="/graph"');
+    // Landing page is not a dead end: buildIndexContent adds an overview +
+    // pointers (the closing tip links to the graph view).
+    expect(html).toContain('graph view');
   });
 
   // @lat: [[tests/serve#Section page]]

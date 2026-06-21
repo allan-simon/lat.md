@@ -310,7 +310,7 @@ Started by [[src/cli/serve.ts#serveCommand]], a plain `node:http` server. It reu
 
 The server exposes a small fixed set of routes; everything else 404s.
 
-- `GET /` — index: a sidebar listing every section grouped by file, plus the live search box.
+- `GET /` — index: a landing overview + first pointers from [[src/render/site.ts#buildIndexContent]] (the curated root index file plus auto-derived "Popular entry points"), alongside the sidebar section tree and live search box.
 - `GET /section?id=<section-id>` — a rendered section page (content, "Referenced by", "References", "Referenced by code").
 - `GET /api/search?q=<query>&limit=<n>` — JSON search results `{matches: [{id, heading, file, firstParagraph, reason, score}]}`.
 - `GET /_widgets/<path>` — static [[cli#serve#Widgets]] files.

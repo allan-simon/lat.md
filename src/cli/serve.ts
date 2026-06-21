@@ -9,6 +9,7 @@ import {
   buildResolver,
   buildSidebar,
   buildSectionContent,
+  buildIndexContent,
   renderPage,
   graphPageContent,
   graphScript,
@@ -127,13 +128,25 @@ export async function serveCommand(
       const resolver = buildResolver(allSections, sectionUrl);
 
       if (path === '/' || path === '') {
+        const edges = await collectEdges(
+          ctx.latDir,
+          ctx.projectRoot,
+          allSections,
+        );
+        const content = await buildIndexContent(
+          ctx.latDir,
+          allSections,
+          sectionUrl,
+          GRAPH_HREF,
+          edges,
+        );
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }).end(
           renderPage({
             title: 'lat.md',
             homeHref: '/',
             graphHref: GRAPH_HREF,
             sidebar: buildSidebar(allSections, sectionUrl),
-            content: '',
+            content,
             search: { mode: 'server' },
           }),
         );

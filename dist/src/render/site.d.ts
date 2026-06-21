@@ -86,3 +86,14 @@ export declare function graphScript(graphHref: string): string;
 export declare function buildSidebar(allSections: Section[], sectionUrl: SectionUrl): string;
 /** Section page body: rendered content + backlinks + code back-refs. */
 export declare function buildSectionContent(found: SectionFound, resolver: WikiLinkResolver, sectionUrl: SectionUrl): Promise<string>;
+/**
+ * Landing-page content: an overview + first pointers, so the index isn't a
+ * dead end. Renders the curated root index file (`lat.md/lat.md`) if present —
+ * the maintainer's own overview + linked list of top-level areas — and appends
+ * auto-derived "entry points": the most-referenced concrete sections (hubs in
+ * the [[parser#Wiki Links]] graph). See [[cli#serve]] / [[cli#build]].
+ */
+export declare function buildIndexContent(latDir: string, allSections: Section[], sectionUrl: SectionUrl, graphHref: string, edges: {
+    source: string;
+    target: string;
+}[]): Promise<string>;

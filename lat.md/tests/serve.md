@@ -8,7 +8,7 @@ Tests in `tests/serve.test.ts` for the [[cli#serve]] HTTP server. They spawn the
 
 ## Index page
 
-Verify `GET /` returns 200 with the page shell — the `lat.md` title, section links into `/section?id=…`, and the sidebar link to `/graph`.
+Verify `GET /` returns 200 with the page shell — the `lat.md` title, section links into `/section?id=…`, the sidebar link to `/graph`, and the landing overview from [[src/render/site.ts#buildIndexContent]] (its closing tip links to the graph view, so the index isn't a dead end).
 
 ## Section page
 

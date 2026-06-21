@@ -4,7 +4,7 @@ import { join, normalize, extname, sep } from 'node:path';
 import { loadAllSections } from '../lattice.js';
 import { getSection } from './section.js';
 import { escapeHtml } from '../render/html.js';
-import { buildResolver, buildSidebar, buildSectionContent, renderPage, graphPageContent, graphScript, lastSegment, } from '../render/site.js';
+import { buildResolver, buildSidebar, buildSectionContent, buildIndexContent, renderPage, graphPageContent, graphScript, lastSegment, } from '../render/site.js';
 import { collectEdges, buildGraphData } from '../graph.js';
 /** Section URL scheme for the live server: a query route handled by `/section`. */
 const sectionUrl = (id) => `/section?id=${encodeURIComponent(id)}`;
@@ -101,12 +101,14 @@ export async function serveCommand(ctx, opts) {
             const allSections = await loadAllSections(ctx.latDir);
             const resolver = buildResolver(allSections, sectionUrl);
             if (path === '/' || path === '') {
+                const edges = await collectEdges(ctx.latDir, ctx.projectRoot, allSections);
+                const content = await buildIndexContent(ctx.latDir, allSections, sectionUrl, GRAPH_HREF, edges);
                 res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }).end(renderPage({
                     title: 'lat.md',
                     homeHref: '/',
                     graphHref: GRAPH_HREF,
                     sidebar: buildSidebar(allSections, sectionUrl),
-                    content: '',
+                    content,
                     search: { mode: 'server' },
                 }));
                 return;

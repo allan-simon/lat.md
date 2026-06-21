@@ -4,7 +4,7 @@ import { join, isAbsolute, relative } from 'node:path';
 import { loadAllSections, flattenSections, listLatticeFiles, buildFileIndex, resolveRef, extractRefs, } from '../lattice.js';
 import { scanCodeRefs } from '../code-refs.js';
 import { isSourceTarget } from '../render/html.js';
-import { buildResolver, buildSidebar, buildSectionContent, renderPage, graphPageContent, graphScript, STATIC_EMBED_MODEL, } from '../render/site.js';
+import { buildResolver, buildSidebar, buildSectionContent, buildIndexContent, renderPage, graphPageContent, graphScript, STATIC_EMBED_MODEL, } from '../render/site.js';
 import { buildGraphData } from '../graph.js';
 const GRAPH_HREF = 'graph.html';
 /** A filesystem-safe slug for a section id (collisions disambiguated by caller). */
@@ -169,18 +169,8 @@ export async function buildCommand(ctx, opts) {
             denseNote = ctx.styler.yellow(' --dense skipped: install the optional @huggingface/transformers dependency.');
         }
     }
-    // Index page + search index.
-    await writeFile(join(outDir, 'index.html'), renderPage({
-        title: 'lat.md',
-        homeHref: 'index.html',
-        graphHref: GRAPH_HREF,
-        sidebar,
-        content: '<h1>lat.md</h1><p>Browse the knowledge graph in the sidebar, or search above.</p>',
-        search: { mode: 'static', indexHref: 'search-index.json' },
-    }));
-    await writeFile(join(outDir, 'search-index.json'), JSON.stringify(searchIndex));
-    // Graph page + data. Edges are derived from the already-aggregated link map
-    // (no extra file walk).
+    // Edges, derived from the already-aggregated link map (no extra file walk).
+    // Needed for both the landing-page entry points and the graph data.
     const edges = [];
     for (const [fromLower, inner] of outgoing) {
         const from = byId.get(fromLower);
@@ -189,6 +179,17 @@ export async function buildCommand(ctx, opts) {
         for (const to of inner.values())
             edges.push({ source: from.id, target: to.id });
     }
+    // Index page (overview + entry points) + search index.
+    await writeFile(join(outDir, 'index.html'), renderPage({
+        title: 'lat.md',
+        homeHref: 'index.html',
+        graphHref: GRAPH_HREF,
+        sidebar,
+        content: await buildIndexContent(latDir, allSections, sectionUrl, GRAPH_HREF, edges),
+        search: { mode: 'static', indexHref: 'search-index.json' },
+    }));
+    await writeFile(join(outDir, 'search-index.json'), JSON.stringify(searchIndex));
+    // Graph page + data.
     await writeFile(join(outDir, 'graph.json'), JSON.stringify(buildGraphData(allSections, edges, sectionUrl)));
     await writeFile(join(outDir, 'graph.html'), renderPage({
         title: 'Graph',

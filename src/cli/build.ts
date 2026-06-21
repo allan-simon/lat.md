@@ -19,6 +19,7 @@ import {
   buildResolver,
   buildSidebar,
   buildSectionContent,
+  buildIndexContent,
   renderPage,
   graphPageContent,
   graphScript,
@@ -233,7 +234,17 @@ export async function buildCommand(
     }
   }
 
-  // Index page + search index.
+  // Edges, derived from the already-aggregated link map (no extra file walk).
+  // Needed for both the landing-page entry points and the graph data.
+  const edges: GraphEdge[] = [];
+  for (const [fromLower, inner] of outgoing) {
+    const from = byId.get(fromLower);
+    if (!from) continue;
+    for (const to of inner.values())
+      edges.push({ source: from.id, target: to.id });
+  }
+
+  // Index page (overview + entry points) + search index.
   await writeFile(
     join(outDir, 'index.html'),
     renderPage({
@@ -241,8 +252,13 @@ export async function buildCommand(
       homeHref: 'index.html',
       graphHref: GRAPH_HREF,
       sidebar,
-      content:
-        '<h1>lat.md</h1><p>Browse the knowledge graph in the sidebar, or search above.</p>',
+      content: await buildIndexContent(
+        latDir,
+        allSections,
+        sectionUrl,
+        GRAPH_HREF,
+        edges,
+      ),
       search: { mode: 'static', indexHref: 'search-index.json' },
     }),
   );
@@ -251,15 +267,7 @@ export async function buildCommand(
     JSON.stringify(searchIndex),
   );
 
-  // Graph page + data. Edges are derived from the already-aggregated link map
-  // (no extra file walk).
-  const edges: GraphEdge[] = [];
-  for (const [fromLower, inner] of outgoing) {
-    const from = byId.get(fromLower);
-    if (!from) continue;
-    for (const to of inner.values())
-      edges.push({ source: from.id, target: to.id });
-  }
+  // Graph page + data.
   await writeFile(
     join(outDir, 'graph.json'),
     JSON.stringify(buildGraphData(allSections, edges, sectionUrl)),

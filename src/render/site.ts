@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import {
   flattenSections,
   buildFileIndex,
@@ -517,5 +519,77 @@ export async function buildSectionContent(
     );
   }
 
+  return parts.join('\n');
+}
+
+/** Strip `[[wiki link]]` syntax to readable text (alias, or the last segment). */
+function stripWiki(s: string): string {
+  return s.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_m, target, alias) =>
+    alias ? alias : (target as string).split(/[#/]/).pop() || target,
+  );
+}
+
+/**
+ * Landing-page content: an overview + first pointers, so the index isn't a
+ * dead end. Renders the curated root index file (`lat.md/lat.md`) if present —
+ * the maintainer's own overview + linked list of top-level areas — and appends
+ * auto-derived "entry points": the most-referenced concrete sections (hubs in
+ * the [[parser#Wiki Links]] graph). See [[cli#serve]] / [[cli#build]].
+ */
+export async function buildIndexContent(
+  latDir: string,
+  allSections: Section[],
+  sectionUrl: SectionUrl,
+  graphHref: string,
+  edges: { source: string; target: string }[],
+): Promise<string> {
+  const resolver = buildResolver(allSections, sectionUrl);
+  const parts: string[] = ['<h1>lat.md</h1>'];
+
+  // Curated overview from the root index file, if it exists.
+  let overview = '';
+  try {
+    const raw = await readFile(join(latDir, 'lat.md'), 'utf-8');
+    overview = (await renderMarkdown(raw, resolver)).trim();
+  } catch {
+    // no root index — fall back to a generic line
+  }
+  parts.push(
+    overview
+      ? `<section class="overview">${overview}</section>`
+      : '<p>Browse the knowledge graph in the sidebar, or search above.</p>',
+  );
+
+  // Auto-derived entry points: concrete sections with the most inbound links.
+  const flat = flattenSections(allSections);
+  const byId = new Map(flat.map((s) => [s.id, s]));
+  const inbound = new Map<string, number>();
+  for (const e of edges) inbound.set(e.target, (inbound.get(e.target) ?? 0) + 1);
+  const hubs = [...inbound.entries()]
+    .map(([id, count]) => ({ section: byId.get(id), count }))
+    .filter((h): h is { section: Section; count: number } => !!h.section)
+    .filter((h) => h.section.depth > 1) // skip file roots (already in the overview)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 6);
+
+  if (hubs.length) {
+    const items = hubs
+      .map((h) => {
+        const desc = h.section.firstParagraph
+          ? ` <span class="desc">— ${escapeHtml(stripWiki(h.section.firstParagraph))}</span>`
+          : '';
+        return `<li><a href="${sectionUrl(h.section.id)}">${escapeHtml(
+          lastSegment(h.section.id),
+        )}</a>${desc}</li>`;
+      })
+      .join('');
+    parts.push(
+      `<section class="backlinks"><h2>Popular entry points</h2><ul>${items}</ul></section>`,
+    );
+  }
+
+  parts.push(
+    `<p class="dim">Search above, browse every section in the sidebar, or explore the <a href="${graphHref}">graph view</a>.</p>`,
+  );
   return parts.join('\n');
 }
