@@ -6,6 +6,7 @@ import { getSection } from './section.js';
 import { escapeHtml } from '../render/html.js';
 import { buildResolver, buildSidebar, buildSectionContent, buildIndexContent, renderPage, graphPageContent, graphScript, lastSegment, } from '../render/site.js';
 import { collectEdges, buildGraphData } from '../graph.js';
+import { detectRepo, buildSourceLineMap, sourceHrefFor, blobUrl, } from '../codelink.js';
 /** Section URL scheme for the live server: a query route handled by `/section`. */
 const sectionUrl = (id) => `/section?id=${encodeURIComponent(id)}`;
 const GRAPH_HREF = '/graph';
@@ -56,6 +57,13 @@ async function serveWidget(latDir, reqPath) {
 export async function serveCommand(ctx, opts) {
     const { runSearch } = await import('./search.js');
     const { getEffectiveKey } = await import('../config.js');
+    // Detect the GitHub repo once at startup so source refs / code back-refs link
+    // to the code; the symbol→line map is resolved up front (tree-sitter) and
+    // reused across requests.
+    const repo = detectRepo(ctx.projectRoot);
+    const lineMap = await buildSourceLineMap(ctx.latDir, ctx.projectRoot);
+    const sourceHref = sourceHrefFor(repo, lineMap);
+    const codeRefHref = (file, line) => repo ? blobUrl(repo, file, line) : null;
     const server = createServer(async (req, res) => {
         try {
             const url = new URL(req.url ?? '/', 'http://localhost');
@@ -99,7 +107,7 @@ export async function serveCommand(ctx, opts) {
             // Reload sections per navigation so edits show on refresh (no watcher
             // needed for a local docs server).
             const allSections = await loadAllSections(ctx.latDir);
-            const resolver = buildResolver(allSections, sectionUrl);
+            const resolver = buildResolver(allSections, sectionUrl, sourceHref);
             if (path === '/' || path === '') {
                 const edges = await collectEdges(ctx.latDir, ctx.projectRoot, allSections);
                 const content = await buildIndexContent(ctx.latDir, allSections, sectionUrl, GRAPH_HREF, edges);
@@ -129,7 +137,7 @@ export async function serveCommand(ctx, opts) {
                     }));
                     return;
                 }
-                const content = await buildSectionContent(found, resolver, sectionUrl);
+                const content = await buildSectionContent(found, resolver, sectionUrl, codeRefHref);
                 res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }).end(renderPage({
                     title: lastSegment(found.section.id),
                     homeHref: '/',

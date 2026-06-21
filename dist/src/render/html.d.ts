@@ -11,6 +11,7 @@ export type LinkResolution = {
 } | {
     kind: 'source';
     label: string;
+    href?: string;
 } | {
     kind: 'broken';
     label: string;

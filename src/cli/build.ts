@@ -27,6 +27,12 @@ import {
   type SectionUrl,
 } from '../render/site.js';
 import { buildGraphData, type GraphEdge } from '../graph.js';
+import {
+  detectRepo,
+  buildSourceLineMap,
+  sourceHrefFor,
+  blobUrl,
+} from '../codelink.js';
 
 const GRAPH_HREF = 'graph.html';
 
@@ -136,11 +142,19 @@ export async function buildCommand(
     codeMap.set(toLower, arr);
   }
 
+  // Source code links → GitHub blob URLs (pinned to the built commit), so the
+  // published site's `[[src/…]]` refs and `@lat:` back-refs are clickable.
+  const repo = detectRepo(projectRoot);
+  const lineMap = await buildSourceLineMap(latDir, projectRoot);
+  const sourceHref = sourceHrefFor(repo, lineMap);
+  const codeRefHref = (file: string, line: number) =>
+    repo ? blobUrl(repo, file, line) : null;
+
   // ── Emit ─────────────────────────────────────────────────────────
   await rm(outDir, { recursive: true, force: true });
   await mkdir(outDir, { recursive: true });
 
-  const resolver = buildResolver(allSections, sectionUrl);
+  const resolver = buildResolver(allSections, sectionUrl, sourceHref);
   const sidebar = buildSidebar(allSections, sectionUrl);
   const sliceCache = new Map<string, string[]>();
   const searchIndex: {
@@ -184,7 +198,12 @@ export async function buildCommand(
       codeRefs: codeMap.get(idLower) ?? [],
     };
 
-    const body = await buildSectionContent(found, resolver, sectionUrl);
+    const body = await buildSectionContent(
+      found,
+      resolver,
+      sectionUrl,
+      codeRefHref,
+    );
     const html = renderPage({
       title: section.heading,
       homeHref: 'index.html',

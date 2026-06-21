@@ -30,12 +30,15 @@ export function lastSegment(id: string): string {
 
 /**
  * Build a [[wiki link]] resolver over the lattice: section targets become links
- * (via `sectionUrl`), source-symbol targets render inert, and unresolved targets
- * are flagged broken. Shared by `serve` and `build` so links are consistent.
+ * (via `sectionUrl`), source-symbol targets link to their code (via `sourceHref`,
+ * e.g. a GitHub blob URL) or render inert when none is available, and unresolved
+ * targets are flagged broken. Shared by `serve` and `build` so links are
+ * consistent. See [[src/codelink.ts#sourceHrefFor]].
  */
 export function buildResolver(
   allSections: Section[],
   sectionUrl: SectionUrl,
+  sourceHref?: (target: string) => string | null,
 ): WikiLinkResolver {
   const flat = flattenSections(allSections);
   const sectionIds = new Set(flat.map((s) => s.id.toLowerCase()));
@@ -43,7 +46,13 @@ export function buildResolver(
   const byId = new Map(flat.map((s) => [s.id.toLowerCase(), s]));
 
   return (target: string) => {
-    if (isSourceTarget(target)) return { kind: 'source', label: target };
+    if (isSourceTarget(target)) {
+      return {
+        kind: 'source',
+        label: target,
+        href: sourceHref?.(target) ?? undefined,
+      };
+    }
     const { resolved } = resolveRef(target, sectionIds, fileIndex);
     const section = byId.get(resolved.toLowerCase());
     if (section) {
@@ -458,11 +467,14 @@ export function buildSidebar(
   return groups.join('');
 }
 
-/** Section page body: rendered content + backlinks + code back-refs. */
+/** Section page body: rendered content + backlinks + code back-refs.
+ * `codeRefHref` (optional) links each `@lat:` back-ref to its source line, e.g.
+ * on GitHub; without it the file:line renders as plain text. */
 export async function buildSectionContent(
   found: SectionFound,
   resolver: WikiLinkResolver,
   sectionUrl: SectionUrl,
+  codeRefHref?: (file: string, line: number) => string | null,
 ): Promise<string> {
   const { section, content, incomingRefs, outgoingRefs, codeRefs } = found;
   const html = await renderMarkdown(content, resolver);
@@ -505,14 +517,20 @@ export async function buildSectionContent(
 
   if (codeRefs.length) {
     const items = codeRefs
-      .map(
-        (c) =>
-          `<li class="coderef">${escapeHtml(c.file)}:${c.line}` +
+      .map((c) => {
+        const loc = `${escapeHtml(c.file)}:${c.line}`;
+        const href = codeRefHref?.(c.file, c.line);
+        const locHtml = href
+          ? `<a href="${href}" target="_blank" rel="noopener">${loc}</a>`
+          : loc;
+        return (
+          `<li class="coderef">${locHtml}` +
           (c.snippet
             ? `<pre><code>${escapeHtml(c.snippet)}</code></pre>`
             : '') +
-          `</li>`,
-      )
+          `</li>`
+        );
+      })
       .join('');
     parts.push(
       `<section class="backlinks"><h2>Referenced by code</h2><ul>${items}</ul></section>`,
@@ -564,7 +582,8 @@ export async function buildIndexContent(
   const flat = flattenSections(allSections);
   const byId = new Map(flat.map((s) => [s.id, s]));
   const inbound = new Map<string, number>();
-  for (const e of edges) inbound.set(e.target, (inbound.get(e.target) ?? 0) + 1);
+  for (const e of edges)
+    inbound.set(e.target, (inbound.get(e.target) ?? 0) + 1);
   const hubs = [...inbound.entries()]
     .map(([id, count]) => ({ section: byId.get(id), count }))
     .filter((h): h is { section: Section; count: number } => !!h.section)

@@ -33,3 +33,4 @@ Shared patterns for writing and organizing tests in this project.
 - [[build]] — Static site generation and client-side BM25 search
 - [[graph]] — Section-graph data for the interactive graph view
 - [[serve]] — HTTP routes of the lat serve docs server
+- [[codelink]] — GitHub blob links for source-code refs on the docs site

@@ -17,6 +17,12 @@ import {
   type SectionUrl,
 } from '../render/site.js';
 import { collectEdges, buildGraphData } from '../graph.js';
+import {
+  detectRepo,
+  buildSourceLineMap,
+  sourceHrefFor,
+  blobUrl,
+} from '../codelink.js';
 
 /** Section URL scheme for the live server: a query route handled by `/section`. */
 const sectionUrl: SectionUrl = (id) => `/section?id=${encodeURIComponent(id)}`;
@@ -79,6 +85,15 @@ export async function serveCommand(
   const { runSearch } = await import('./search.js');
   const { getEffectiveKey } = await import('../config.js');
 
+  // Detect the GitHub repo once at startup so source refs / code back-refs link
+  // to the code; the symbol→line map is resolved up front (tree-sitter) and
+  // reused across requests.
+  const repo = detectRepo(ctx.projectRoot);
+  const lineMap = await buildSourceLineMap(ctx.latDir, ctx.projectRoot);
+  const sourceHref = sourceHrefFor(repo, lineMap);
+  const codeRefHref = (file: string, line: number) =>
+    repo ? blobUrl(repo, file, line) : null;
+
   const server = createServer(async (req, res) => {
     try {
       const url = new URL(req.url ?? '/', 'http://localhost');
@@ -125,7 +140,7 @@ export async function serveCommand(
       // Reload sections per navigation so edits show on refresh (no watcher
       // needed for a local docs server).
       const allSections = await loadAllSections(ctx.latDir);
-      const resolver = buildResolver(allSections, sectionUrl);
+      const resolver = buildResolver(allSections, sectionUrl, sourceHref);
 
       if (path === '/' || path === '') {
         const edges = await collectEdges(
@@ -171,7 +186,12 @@ export async function serveCommand(
             );
           return;
         }
-        const content = await buildSectionContent(found, resolver, sectionUrl);
+        const content = await buildSectionContent(
+          found,
+          resolver,
+          sectionUrl,
+          codeRefHref,
+        );
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }).end(
           renderPage({
             title: lastSegment(found.section.id),

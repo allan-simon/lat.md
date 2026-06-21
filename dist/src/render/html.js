@@ -163,12 +163,27 @@ export async function renderMarkdown(markdown, resolve) {
                     };
                 }
                 if (r.kind === 'source') {
-                    return {
+                    const codeEl = {
                         type: 'element',
                         tagName: 'code',
                         properties: { className: ['srcref'] },
                         children: [{ type: 'text', value: alias ?? r.label }],
                     };
+                    // Link to the source on GitHub when a URL is available (static
+                    // build / serve with a detected repo); otherwise render inert.
+                    return r.href
+                        ? {
+                            type: 'element',
+                            tagName: 'a',
+                            properties: {
+                                href: r.href,
+                                className: ['srcref'],
+                                target: '_blank',
+                                rel: 'noopener',
+                            },
+                            children: [codeEl],
+                        }
+                        : codeEl;
                 }
                 return {
                     type: 'element',

@@ -6,6 +6,7 @@ import { scanCodeRefs } from '../code-refs.js';
 import { isSourceTarget } from '../render/html.js';
 import { buildResolver, buildSidebar, buildSectionContent, buildIndexContent, renderPage, graphPageContent, graphScript, STATIC_EMBED_MODEL, } from '../render/site.js';
 import { buildGraphData } from '../graph.js';
+import { detectRepo, buildSourceLineMap, sourceHrefFor, blobUrl, } from '../codelink.js';
 const GRAPH_HREF = 'graph.html';
 /** A filesystem-safe slug for a section id (collisions disambiguated by caller). */
 function slugify(id) {
@@ -99,10 +100,16 @@ export async function buildCommand(ctx, opts) {
         arr.push({ file: ref.file, line: ref.line, snippet });
         codeMap.set(toLower, arr);
     }
+    // Source code links → GitHub blob URLs (pinned to the built commit), so the
+    // published site's `[[src/…]]` refs and `@lat:` back-refs are clickable.
+    const repo = detectRepo(projectRoot);
+    const lineMap = await buildSourceLineMap(latDir, projectRoot);
+    const sourceHref = sourceHrefFor(repo, lineMap);
+    const codeRefHref = (file, line) => repo ? blobUrl(repo, file, line) : null;
     // ── Emit ─────────────────────────────────────────────────────────
     await rm(outDir, { recursive: true, force: true });
     await mkdir(outDir, { recursive: true });
-    const resolver = buildResolver(allSections, sectionUrl);
+    const resolver = buildResolver(allSections, sectionUrl, sourceHref);
     const sidebar = buildSidebar(allSections, sectionUrl);
     const sliceCache = new Map();
     const searchIndex = [];
@@ -129,7 +136,7 @@ export async function buildCommand(ctx, opts) {
             incomingRefs,
             codeRefs: codeMap.get(idLower) ?? [],
         };
-        const body = await buildSectionContent(found, resolver, sectionUrl);
+        const body = await buildSectionContent(found, resolver, sectionUrl, codeRefHref);
         const html = renderPage({
             title: section.heading,
             homeHref: 'index.html',
