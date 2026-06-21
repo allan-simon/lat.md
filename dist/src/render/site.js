@@ -76,14 +76,16 @@ a { color:var(--accent); text-decoration:none; } a:hover { text-decoration:under
 #graph { display:block; width:100%; height:78vh; border:1px solid var(--border); border-radius:8px; background:#0c0e13; }
 .content img, .content table { max-width:100%; }
 .content table { display:block; overflow-x:auto; }
-/* Mobile drawer: hidden on desktop, hamburger-toggled under 800px. */
+/* Mobile: brand + search stay visible; only the (long) section tree collapses
+   behind a toggle. Toggle is hidden on desktop where the tree is always shown. */
 .navtoggle, .navtoggle-btn { display:none; }
 .navtoggle-close { display:none; }
 @media (max-width: 800px) {
   .layout { display:block; }
-  .navtoggle-btn { display:block; position:sticky; top:0; z-index:5; background:var(--panel); border-bottom:1px solid var(--border); padding:.7rem 1rem; font-weight:600; cursor:pointer; color:var(--fg); user-select:none; }
-  .sidebar { display:none; position:static; max-height:none; border-right:none; border-bottom:1px solid var(--border); }
-  .navtoggle:checked ~ .layout .sidebar { display:block; }
+  .sidebar { position:static; max-height:none; border-right:none; border-bottom:1px solid var(--border); }
+  #tree { display:none; }
+  .navtoggle:checked ~ #tree { display:block; }
+  .navtoggle-btn { display:block; margin-top:.6rem; padding:.5rem .7rem; background:var(--bg); border:1px solid var(--border); border-radius:6px; font-weight:600; cursor:pointer; color:var(--fg); user-select:none; }
   .navtoggle:checked ~ .navtoggle-btn .navtoggle-open { display:none; }
   .navtoggle:checked ~ .navtoggle-btn .navtoggle-close { display:inline; }
   .content { padding:1.3rem 1rem; max-width:none; }
@@ -273,13 +275,13 @@ export function renderPage(opts) {
 <title>${escapeHtml(opts.title)}</title>
 <style>${STYLE}</style>
 </head><body>
-<input type="checkbox" id="navtoggle" class="navtoggle">
-<label for="navtoggle" class="navtoggle-btn"><span class="navtoggle-open">☰ Menu</span><span class="navtoggle-close">✕ Close</span></label>
 <div class="layout">
   <aside class="sidebar">
     <div class="brand"><a href="${opts.homeHref}">lat.md</a> <a class="graphlink" href="${opts.graphHref}">graph</a></div>
     <div class="search"><input id="q" type="search" placeholder="Search the graph…" autocomplete="off"></div>
     <div id="results"></div>
+    <input type="checkbox" id="navtoggle" class="navtoggle">
+    <label for="navtoggle" class="navtoggle-btn"><span class="navtoggle-open">☰ Browse sections</span><span class="navtoggle-close">✕ Hide sections</span></label>
     <nav id="tree">${opts.sidebar}</nav>
   </aside>
   <main class="content">${opts.content}</main>
