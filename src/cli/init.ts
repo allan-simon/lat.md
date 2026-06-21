@@ -753,8 +753,11 @@ async function setupClaudeCode(
     );
   }
 
-  // Ensure .mcp.json is gitignored (it contains local absolute paths)
-  ensureGitignored(root, '.mcp.json');
+  // Only gitignore .mcp.json when it holds a machine-specific absolute path
+  // (local style). Global/npx commands are portable, so the file is safe to
+  // commit — letting the MCP server "travel" with the repo to every clone
+  // instead of silently missing until `lat init` is re-run per machine.
+  if (style === 'local') ensureGitignored(root, '.mcp.json');
 }
 
 async function setupCursor(

@@ -170,7 +170,7 @@ Sets up `CLAUDE.md` and two agent hooks for the Claude Code coding agent.
   - `Stop` → `lat hook claude Stop` — reminds the agent to update `lat.md/` before finishing
 - `.claude/skills/lat-md/SKILL.md` — skill spec generated from `templates/skill/SKILL.md`. Teaches the agent how to author and maintain `lat.md/` files. Claude Code discovers it automatically from `.claude/skills/`.
 - `.claude` directory added to `.gitignore` (settings contain local absolute paths in hook commands)
-- [[cli#mcp]] server registered in `.mcp.json` at the project root (added to `.gitignore` since it contains absolute paths)
+- [[cli#mcp]] server registered in `.mcp.json` at the project root. Added to `.gitignore` only for the `local` command style (which embeds a machine-specific absolute path); with the portable `global`/`npx` styles the file is left committable, so the MCP server travels with the repo to every clone instead of being silently absent until `lat init` is re-run per machine.
 
 ### Pi
 
