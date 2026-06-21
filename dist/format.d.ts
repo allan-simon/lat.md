@@ -1,9 +1,0 @@
-import type { Section, SectionMatch } from './lattice.js';
-import type { CmdContext, Styler } from './context.js';
-export declare function formatSectionId(id: string, s: Styler): string;
-export declare function formatSectionPreview(ctx: CmdContext, section: Section, opts?: {
-    reason?: string;
-    score?: number;
-}): string;
-export declare function formatResultList(ctx: CmdContext, header: string, matches: SectionMatch[]): string;
-export declare function formatNavHints(ctx: CmdContext): string;
